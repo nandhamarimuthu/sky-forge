@@ -1,0 +1,29 @@
+{
+ "Snapshots": [
+  {
+   "SnapshotId": "snap-45529b5835d066005",
+   "VolumeSize": 250,
+   "State": "completed",
+   "StartTime": "2025-10-07T00:00:00Z",
+   "Description": "Backup of orders-api-db-launch",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-db-launch"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  }
+ ]
+}

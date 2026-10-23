@@ -1,0 +1,134 @@
+{
+ "Volumes": [
+  {
+   "VolumeId": "vol-f7318a797ccae55c8",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-1a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-fc7859faeecc3f80c",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-web-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-c8ae12b7d76d4aea3",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-1a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-f46107d604d5b20df",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-worker-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-624cf4bcfb31f7302",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-1a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-14027b0b8f83a272a",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-staging-replica-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "staging"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-3d5137823e2d8faac",
+   "Size": 1000,
+   "VolumeType": "io1",
+   "State": "available",
+   "CreateTime": "2026-05-05T00:00:00Z",
+   "AvailabilityZone": "eu-west-1a",
+   "Encrypted": true,
+   "Attachments": [],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-reindex-temp"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+  "account_id": "456789012345",
+  "region": "eu-west-2",
+  "currency": "USD",
+  "period_start": "2026-09-22",
+  "period_end": "2026-10-21",
+  "exported_at": "2026-10-22T06:00:00Z",
+  "granularity": "DAILY",
+  "project_tag": "",
+  "format": "skyforge-aws-dump/v1",
+  "description": "Shared platform account (no per-project tags) \u2014 default dump for external repositories. One month of Cost & Usage Report rows with CloudWatch utilisation and resource inventory.",
+  "files": [
+    "cost_and_usage.csv",
+    "ec2_instances.json",
+    "ebs_volumes.json",
+    "ebs_snapshots.json",
+    "rds_instances.json",
+    "nat_gateways.json",
+    "load_balancers.json",
+    "lambda_functions.json",
+    "s3_buckets.json",
+    "cloudwatch_metrics.json"
+  ]
+}

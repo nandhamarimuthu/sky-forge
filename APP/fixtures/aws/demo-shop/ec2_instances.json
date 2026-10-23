@@ -1,0 +1,166 @@
+{
+ "Reservations": [
+  {
+   "ReservationId": "r-cc6b6f5e11c793833",
+   "OwnerId": "210987654321",
+   "Instances": [
+    {
+     "InstanceId": "i-8dda1494c73cf256d",
+     "InstanceType": "m5.2xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-05-12T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.237.201",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "demo-shop-api"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "demo-shop"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX",
+     "PublicIpAddress": "18.159.116.131"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-f4d32e9fc1822074f",
+   "OwnerId": "210987654321",
+   "Instances": [
+    {
+     "InstanceId": "i-f4fd26ec4b372c56b",
+     "InstanceType": "m5.xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2026-07-07T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2b"
+     },
+     "PrivateIpAddress": "10.0.6.155",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "demo-shop-worker"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "demo-shop"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-1906342ce81df9018",
+   "OwnerId": "210987654321",
+   "Instances": [
+    {
+     "InstanceId": "i-570dee6930981abb6",
+     "InstanceType": "t3.large",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-10-16T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.108.198",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "demo-shop-legacy-batch"
+      },
+      {
+       "Key": "Environment",
+       "Value": "staging"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "demo-shop"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-39160366a11575979",
+   "OwnerId": "210987654321",
+   "Instances": [
+    {
+     "InstanceId": "i-3ebff2ec167c1e0bc",
+     "InstanceType": "t3.micro",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-09-18T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.43.26",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "demo-shop-bastion"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "demo-shop"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX",
+     "PublicIpAddress": "18.162.203.4"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,31 @@
+{
+ "DBInstances": [
+  {
+   "DBInstanceIdentifier": "platform-metadata",
+   "DBInstanceArn": "arn:aws:rds:eu-west-2:456789012345:db:platform-metadata",
+   "DBInstanceClass": "db.m5.large",
+   "Engine": "postgres",
+   "EngineVersion": "15.7",
+   "DBInstanceStatus": "available",
+   "MultiAZ": false,
+   "AllocatedStorage": 200,
+   "StorageType": "gp2",
+   "StorageEncrypted": true,
+   "PubliclyAccessible": false,
+   "TagList": [
+    {
+     "Key": "Name",
+     "Value": "platform-metadata"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  }
+ ]
+}

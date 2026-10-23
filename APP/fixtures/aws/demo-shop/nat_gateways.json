@@ -1,0 +1,54 @@
+{
+ "NatGateways": [
+  {
+   "NatGatewayId": "nat-8eefa5d5dfc9d803b",
+   "State": "available",
+   "SubnetId": "subnet-ff948c0f",
+   "VpcId": "vpc-0a1b2c3d4e5f60718",
+   "ConnectivityType": "public",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-nat-a"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "NatGatewayId": "nat-1e086bb7497eb8333",
+   "State": "available",
+   "SubnetId": "subnet-3e8d3a59",
+   "VpcId": "vpc-0a1b2c3d4e5f60718",
+   "ConnectivityType": "public",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-nat-b"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  }
+ ]
+}

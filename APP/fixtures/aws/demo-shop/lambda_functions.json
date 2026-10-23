@@ -1,0 +1,32 @@
+{
+ "Functions": [
+  {
+   "FunctionName": "demo-shop-image-resize",
+   "FunctionArn": "arn:aws:lambda:eu-west-2:210987654321:function:demo-shop-image-resize",
+   "Runtime": "python3.11",
+   "MemorySize": 1024,
+   "Timeout": 30,
+   "Architectures": [
+    "x86_64"
+   ],
+   "LastModified": "2026-09-22T00:00:00Z",
+   "Tags": {
+    "Project": "demo-shop"
+   }
+  },
+  {
+   "FunctionName": "demo-shop-order-events",
+   "FunctionArn": "arn:aws:lambda:eu-west-2:210987654321:function:demo-shop-order-events",
+   "Runtime": "python3.11",
+   "MemorySize": 256,
+   "Timeout": 30,
+   "Architectures": [
+    "arm64"
+   ],
+   "LastModified": "2026-09-22T00:00:00Z",
+   "Tags": {
+    "Project": "demo-shop"
+   }
+  }
+ ]
+}

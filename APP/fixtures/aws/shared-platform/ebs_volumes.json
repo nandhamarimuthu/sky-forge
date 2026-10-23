@@ -1,0 +1,118 @@
+{
+ "Volumes": [
+  {
+   "VolumeId": "vol-709791ee15183ac46",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-19b95f239ae97d9db",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-api-gateway-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-bcb39ffe02c49eec8",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-364be72a03a37323d",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-ci-runner-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-0b4683ce8237d0540",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-34981b79c1aafe1fa",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-old-jenkins-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "staging"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-8e2f22f50c9c80a44",
+   "Size": 800,
+   "VolumeType": "gp2",
+   "State": "available",
+   "CreateTime": "2025-07-29T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-jenkins-home"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  }
+ ]
+}

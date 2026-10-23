@@ -1,0 +1,16 @@
+{
+ "Functions": [
+  {
+   "FunctionName": "platform-log-shipper",
+   "FunctionArn": "arn:aws:lambda:eu-west-2:456789012345:function:platform-log-shipper",
+   "Runtime": "python3.11",
+   "MemorySize": 512,
+   "Timeout": 30,
+   "Architectures": [
+    "x86_64"
+   ],
+   "LastModified": "2026-09-22T00:00:00Z",
+   "Tags": {}
+  }
+ ]
+}

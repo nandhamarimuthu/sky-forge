@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skyforge-ai"
+version = "0.1.0"
+description = "SkyForge AI — autonomous engineering platform: security, testing, code health and AWS cost agents."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "fastapi==0.115.6",
+  "uvicorn[standard]==0.32.1",
+  "pydantic==2.14.1",
+  "pydantic-settings==2.16.1",
+  "sqlalchemy==2.0.36",
+  "alembic==1.14.0",
+  "httpx==0.28.1",
+  "packaging==24.2",
+  "radon==6.0.1",
+  "ruff==0.8.4",
+  "boto3==1.35.90",
+  "python-multipart==0.0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.4",
+  "pytest-cov==6.0.0",
+  "mypy==1.14.1",
+]
+# CrewAI is heavy; install only when you want LLM-assisted orchestration with Ollama.
+llm = ["crewai==0.86.0"]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/app/tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 130
+target-version = "py311"
+extend-exclude = ["backend/migrations", "data", "frontend", "fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+ignore = ["S101", "S603", "S607", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/app/tests/*" = ["S105", "S106", "S108"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+plugins = []
+files = ["backend/app"]
+exclude = ["backend/app/tests"]

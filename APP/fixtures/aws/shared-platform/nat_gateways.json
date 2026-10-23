@@ -1,0 +1,46 @@
+{
+ "NatGateways": [
+  {
+   "NatGatewayId": "nat-1db74b4cd39a0de49",
+   "State": "available",
+   "SubnetId": "subnet-1c36cce8",
+   "VpcId": "vpc-0a1b2c3d4e5f60718",
+   "ConnectivityType": "public",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-nat-a"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  },
+  {
+   "NatGatewayId": "nat-e947b9214f5e4313f",
+   "State": "available",
+   "SubnetId": "subnet-053527ce",
+   "VpcId": "vpc-0a1b2c3d4e5f60718",
+   "ConnectivityType": "public",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-nat-c"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  }
+ ]
+}

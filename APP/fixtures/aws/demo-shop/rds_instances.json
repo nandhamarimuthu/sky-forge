@@ -1,0 +1,35 @@
+{
+ "DBInstances": [
+  {
+   "DBInstanceIdentifier": "demo-shop-db",
+   "DBInstanceArn": "arn:aws:rds:eu-west-2:210987654321:db:demo-shop-db",
+   "DBInstanceClass": "db.r5.xlarge",
+   "Engine": "postgres",
+   "EngineVersion": "15.7",
+   "DBInstanceStatus": "available",
+   "MultiAZ": false,
+   "AllocatedStorage": 200,
+   "StorageType": "gp2",
+   "StorageEncrypted": false,
+   "PubliclyAccessible": true,
+   "TagList": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-db"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  }
+ ]
+}

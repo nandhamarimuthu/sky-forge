@@ -1,0 +1,2571 @@
+[
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "CPUUtilization",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-19b95f239ae97d9db"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Percent",
+  "Label": "CPUUtilization",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 38.6702,
+    "Unit": "Percent",
+    "Maximum": 69.9196
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 35.8607,
+    "Unit": "Percent",
+    "Maximum": 60.5586
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 20.886,
+    "Unit": "Percent",
+    "Maximum": 41.0562
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 44.5932,
+    "Unit": "Percent",
+    "Maximum": 70.4523
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 30.9435,
+    "Unit": "Percent",
+    "Maximum": 51.3391
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 39.7278,
+    "Unit": "Percent",
+    "Maximum": 72.3841
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 44.5627,
+    "Unit": "Percent",
+    "Maximum": 91.6527
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 31.4214,
+    "Unit": "Percent",
+    "Maximum": 44.5354
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 39.8884,
+    "Unit": "Percent",
+    "Maximum": 56.2748
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 43.1318,
+    "Unit": "Percent",
+    "Maximum": 92.8946
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 44.3267,
+    "Unit": "Percent",
+    "Maximum": 88.1514
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 30.5807,
+    "Unit": "Percent",
+    "Maximum": 50.4353
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 23.6099,
+    "Unit": "Percent",
+    "Maximum": 37.3462
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 40.0045,
+    "Unit": "Percent",
+    "Maximum": 76.7902
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 42.5727,
+    "Unit": "Percent",
+    "Maximum": 69.8777
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 21.2378,
+    "Unit": "Percent",
+    "Maximum": 30.4477
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 30.3277,
+    "Unit": "Percent",
+    "Maximum": 49.0728
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 33.5917,
+    "Unit": "Percent",
+    "Maximum": 52.4998
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 43.2426,
+    "Unit": "Percent",
+    "Maximum": 65.4916
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 36.2058,
+    "Unit": "Percent",
+    "Maximum": 58.4039
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 30.8088,
+    "Unit": "Percent",
+    "Maximum": 58.7753
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 34.6948,
+    "Unit": "Percent",
+    "Maximum": 60.7507
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 29.154,
+    "Unit": "Percent",
+    "Maximum": 43.2639
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 37.6296,
+    "Unit": "Percent",
+    "Maximum": 72.2106
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 44.2607,
+    "Unit": "Percent",
+    "Maximum": 71.4104
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 40.1773,
+    "Unit": "Percent",
+    "Maximum": 63.9347
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 35.485,
+    "Unit": "Percent",
+    "Maximum": 62.2643
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 32.6299,
+    "Unit": "Percent",
+    "Maximum": 49.0805
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 21.5755,
+    "Unit": "Percent",
+    "Maximum": 36.2584
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 20.1895,
+    "Unit": "Percent",
+    "Maximum": 29.8461
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "NetworkIn",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-19b95f239ae97d9db"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Bytes",
+  "Label": "NetworkIn",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 2447972828.094,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 3733183588.6007,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 3884335864.4638,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 3973229361.5887,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 4452819649.8102,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 2865609142.3488,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 2078072858.8223,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 2539430734.7453,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 4634361474.832,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 2408739377.8143,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 2335864775.506,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 2497628012.9473,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 3739147533.1901,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 3621824501.0654,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 4055796511.6609,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 3072036883.4736,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 2204147522.8235,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 4509472743.8836,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 2672669136.9856,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 2514964760.8698,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 3339120059.8263,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 2202393573.3981,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 2273281715.0683,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 2931615815.6072,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 2651874821.3675,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 2703186594.7967,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 3318250363.2639,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 3693111331.0437,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 3491156250.5426,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 4265591805.0552,
+    "Unit": "Bytes"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "CPUUtilization",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-364be72a03a37323d"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Percent",
+  "Label": "CPUUtilization",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 4.4622,
+    "Unit": "Percent",
+    "Maximum": 8.1205
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 10.5587,
+    "Unit": "Percent",
+    "Maximum": 16.8846
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 10.4164,
+    "Unit": "Percent",
+    "Maximum": 16.6978
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 11.572,
+    "Unit": "Percent",
+    "Maximum": 24.7058
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 10.6661,
+    "Unit": "Percent",
+    "Maximum": 19.6126
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 8.6434,
+    "Unit": "Percent",
+    "Maximum": 13.7825
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 7.6809,
+    "Unit": "Percent",
+    "Maximum": 13.7654
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 8.2885,
+    "Unit": "Percent",
+    "Maximum": 13.4896
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 9.0881,
+    "Unit": "Percent",
+    "Maximum": 18.503
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 11.8135,
+    "Unit": "Percent",
+    "Maximum": 20.2964
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 5.2191,
+    "Unit": "Percent",
+    "Maximum": 10.8236
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 7.9564,
+    "Unit": "Percent",
+    "Maximum": 14.923
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 7.5996,
+    "Unit": "Percent",
+    "Maximum": 14.6002
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 5.9648,
+    "Unit": "Percent",
+    "Maximum": 11.2537
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 5.311,
+    "Unit": "Percent",
+    "Maximum": 9.9266
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 10.2687,
+    "Unit": "Percent",
+    "Maximum": 14.8909
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 8.6796,
+    "Unit": "Percent",
+    "Maximum": 17.6394
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 9.514,
+    "Unit": "Percent",
+    "Maximum": 17.9934
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 6.058,
+    "Unit": "Percent",
+    "Maximum": 9.5667
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 7.8367,
+    "Unit": "Percent",
+    "Maximum": 14.087
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 5.2729,
+    "Unit": "Percent",
+    "Maximum": 11.3942
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 5.215,
+    "Unit": "Percent",
+    "Maximum": 10.0276
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 5.0786,
+    "Unit": "Percent",
+    "Maximum": 9.3538
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 9.1908,
+    "Unit": "Percent",
+    "Maximum": 16.767
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 10.7806,
+    "Unit": "Percent",
+    "Maximum": 15.6908
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 8.5708,
+    "Unit": "Percent",
+    "Maximum": 15.4027
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 10.2407,
+    "Unit": "Percent",
+    "Maximum": 17.8833
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 4.6295,
+    "Unit": "Percent",
+    "Maximum": 8.8617
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 8.1461,
+    "Unit": "Percent",
+    "Maximum": 13.7642
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 5.1163,
+    "Unit": "Percent",
+    "Maximum": 7.7525
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "NetworkIn",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-364be72a03a37323d"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Bytes",
+  "Label": "NetworkIn",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 354726110.812,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 174550376.1352,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 167644957.8582,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 230635046.934,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 383157818.2679,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 309821472.4984,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 142432799.8433,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 128658371.5129,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 250127350.6617,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 118547437.2806,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 168216878.5917,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 133991306.4748,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 359241608.4744,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 365654420.5994,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 360692854.5881,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 296208882.4468,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 111895417.2304,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 182519475.1553,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 348418903.3217,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 112240932.7395,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 249506368.1312,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 338880936.5212,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 176950914.506,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 204057183.9983,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 290708240.6104,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 296572694.3968,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 145957268.1533,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 337067711.2888,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 124890625.6384,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 148193016.9529,
+    "Unit": "Bytes"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "CPUUtilization",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-34981b79c1aafe1fa"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Percent",
+  "Label": "CPUUtilization",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 0.5453,
+    "Unit": "Percent",
+    "Maximum": 0.8922
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 0.4207,
+    "Unit": "Percent",
+    "Maximum": 0.7487
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 0.5618,
+    "Unit": "Percent",
+    "Maximum": 1.1639
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 0.7893,
+    "Unit": "Percent",
+    "Maximum": 1.7315
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 0.3168,
+    "Unit": "Percent",
+    "Maximum": 0.5726
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 0.2606,
+    "Unit": "Percent",
+    "Maximum": 0.5284
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 0.3711,
+    "Unit": "Percent",
+    "Maximum": 0.5265
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 0.2375,
+    "Unit": "Percent",
+    "Maximum": 0.3947
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 0.5001,
+    "Unit": "Percent",
+    "Maximum": 0.8534
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 0.4003,
+    "Unit": "Percent",
+    "Maximum": 0.7917
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 0.5508,
+    "Unit": "Percent",
+    "Maximum": 0.9619
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 0.2319,
+    "Unit": "Percent",
+    "Maximum": 0.3268
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 0.6285,
+    "Unit": "Percent",
+    "Maximum": 1.3
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 0.7592,
+    "Unit": "Percent",
+    "Maximum": 1.2918
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 0.5965,
+    "Unit": "Percent",
+    "Maximum": 0.864
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 0.6646,
+    "Unit": "Percent",
+    "Maximum": 1.3986
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 0.3814,
+    "Unit": "Percent",
+    "Maximum": 0.7273
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 0.5693,
+    "Unit": "Percent",
+    "Maximum": 1.076
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 0.7219,
+    "Unit": "Percent",
+    "Maximum": 1.1399
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 0.5644,
+    "Unit": "Percent",
+    "Maximum": 1.0261
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 0.7204,
+    "Unit": "Percent",
+    "Maximum": 1.2997
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 0.8795,
+    "Unit": "Percent",
+    "Maximum": 1.484
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 0.5309,
+    "Unit": "Percent",
+    "Maximum": 0.9152
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 0.3875,
+    "Unit": "Percent",
+    "Maximum": 0.5638
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 0.8816,
+    "Unit": "Percent",
+    "Maximum": 1.9157
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 0.5158,
+    "Unit": "Percent",
+    "Maximum": 1.0643
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 0.7084,
+    "Unit": "Percent",
+    "Maximum": 1.423
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 0.3649,
+    "Unit": "Percent",
+    "Maximum": 0.594
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 0.8147,
+    "Unit": "Percent",
+    "Maximum": 1.6593
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 0.4218,
+    "Unit": "Percent",
+    "Maximum": 0.7815
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/EC2",
+  "MetricName": "NetworkIn",
+  "Dimensions": [
+   {
+    "Name": "InstanceId",
+    "Value": "i-34981b79c1aafe1fa"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Bytes",
+  "Label": "NetworkIn",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 558529.664,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 680987.1876,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 1149652.034,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 735699.9014,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 1445415.5859,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 280222.3615,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 1242768.5422,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 746595.1691,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 814398.0416,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 904552.7435,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 1424747.9647,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 332761.9365,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 1158562.8271,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 284906.7922,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 641115.9125,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 1179077.6697,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 990018.6366,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 1023558.7439,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 395543.4426,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 904173.7621,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 320688.4569,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 673206.7454,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 1466434.8464,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 336458.0943,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 971768.335,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 1000583.2473,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 1234861.6296,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 1014115.3432,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 387255.8023,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 620808.7547,
+    "Unit": "Bytes"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/RDS",
+  "MetricName": "CPUUtilization",
+  "Dimensions": [
+   {
+    "Name": "DBInstanceIdentifier",
+    "Value": "platform-metadata"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Percent",
+  "Label": "CPUUtilization",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 6.5207,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 4.8891,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 4.6537,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 3.7022,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 5.8356,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 3.4285,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 4.8771,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 3.4031,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 4.991,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 5.6027,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 6.3818,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 5.3552,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 5.8129,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 3.6141,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 4.526,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 3.1144,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 5.1509,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 4.4612,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 5.0855,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 3.1719,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 6.8614,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 6.3742,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 3.7517,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 6.3894,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 5.3112,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 5.7977,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 5.2174,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 6.8011,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 3.4912,
+    "Unit": "Percent"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 6.4375,
+    "Unit": "Percent"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/RDS",
+  "MetricName": "DatabaseConnections",
+  "Dimensions": [
+   {
+    "Name": "DBInstanceIdentifier",
+    "Value": "platform-metadata"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Count",
+  "Label": "DatabaseConnections",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 2.4925,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 2.4033,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 2.9882,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 2.9043,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 1.0088,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 1.4898,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 2.3762,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 2.1784,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 2.1403,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 2.0796,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 2.4461,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 1.2252,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 1.3974,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 1.5553,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 1.9865,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 2.0981,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 1.8581,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 1.6875,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 2.2505,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 1.2297,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 1.4228,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 2.9631,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 2.4055,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 1.3741,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 1.8128,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 1.5972,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 1.9479,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 2.7094,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 2.5805,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 1.0427,
+    "Unit": "Count"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/NATGateway",
+  "MetricName": "BytesOutToDestination",
+  "Dimensions": [
+   {
+    "Name": "NatGatewayId",
+    "Value": "nat-1db74b4cd39a0de49"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Bytes",
+  "Label": "BytesOutToDestination",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 25769267000.4976,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 33599965919.9759,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 30727501389.7189,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 53260285579.0103,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 44447246966.5659,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 42635272532.5053,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 55423513452.8678,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 32803414443.0444,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 30874426738.1642,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 48626578991.1532,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 41816513466.6647,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 38309713730.6791,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 23306448000.0997,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 52556206128.4831,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 46871871299.7175,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 31489262070.8067,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 54337457196.2467,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 32539698980.5154,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 928307875777.1705,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 51136002535.9788,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 23738281122.2268,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 23458440810.1082,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 28351011292.7693,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 40007215692.9013,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 39179171437.9582,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 53594420933.0785,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 55155367333.732,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 56287769161.7051,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 33907902543.8242,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 38279528052.9737,
+    "Unit": "Bytes"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/NATGateway",
+  "MetricName": "BytesOutToDestination",
+  "Dimensions": [
+   {
+    "Name": "NatGatewayId",
+    "Value": "nat-e947b9214f5e4313f"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Bytes",
+  "Label": "BytesOutToDestination",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 98219732.4819,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 52516996.0956,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 130710224.9445,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 110831844.6996,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 112790803.8858,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 195075905.1229,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 165969617.1616,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 108382472.8297,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 39363488.9102,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 152373445.5514,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 138004128.8605,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 199699261.6194,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 148690854.7754,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 94863553.2614,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 152004583.8208,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 191550009.082,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 179398070.9199,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 116817227.558,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 55169903.4004,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 58524202.0312,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 50083190.0589,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 72751767.7003,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 189042825.9998,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 126138577.7154,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 33325063.7537,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 49124934.7541,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 125915614.7722,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 190292690.5806,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 181712088.5901,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 168354981.7545,
+    "Unit": "Bytes"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/ApplicationELB",
+  "MetricName": "RequestCount",
+  "Dimensions": [
+   {
+    "Name": "LoadBalancer",
+    "Value": "app/platform-public-alb/867b3e0977a89bd4"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Count",
+  "Label": "RequestCount",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 333741.4434,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 310069.0182,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 251982.6894,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 214462.5238,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 225843.0566,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 340191.3055,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 284841.9454,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 362767.8527,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 367050.278,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 376391.8457,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 336991.3166,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 268212.9687,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 291807.5606,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 339027.9451,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 255624.289,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 289090.461,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 290315.7626,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 259968.8774,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 315921.5956,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 295050.9721,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 393614.17,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 363756.7733,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 241421.4956,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 367667.7872,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 235993.2531,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 231214.5526,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 247816.5761,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 328841.4818,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 377090.0188,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 284895.4536,
+    "Unit": "Count"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/ApplicationELB",
+  "MetricName": "RequestCount",
+  "Dimensions": [
+   {
+    "Name": "LoadBalancer",
+    "Value": "app/platform-preview-alb/c3495041c92a69c7"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Count",
+  "Label": "RequestCount",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 0.0,
+    "Unit": "Count"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/Lambda",
+  "MetricName": "Invocations",
+  "Dimensions": [
+   {
+    "Name": "FunctionName",
+    "Value": "platform-log-shipper"
+   }
+  ],
+  "Statistic": "Sum",
+  "Unit": "Count",
+  "Label": "Invocations",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Sum": 191216.9272,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Sum": 160590.5286,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Sum": 168785.8288,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Sum": 166961.3857,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Sum": 182725.1563,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Sum": 151700.4381,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Sum": 164454.9419,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Sum": 159883.3751,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Sum": 150820.1817,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Sum": 181014.869,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Sum": 180191.9333,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Sum": 176733.9404,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Sum": 172510.775,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Sum": 164047.55,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Sum": 175566.6089,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Sum": 179058.6985,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Sum": 155039.5257,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Sum": 181239.8946,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Sum": 942752.7652,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Sum": 155840.6376,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Sum": 159494.7917,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Sum": 160446.5979,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Sum": 155778.3019,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Sum": 174624.7156,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Sum": 189696.3523,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Sum": 158031.8969,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Sum": 191463.1538,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Sum": 143435.109,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Sum": 168371.7024,
+    "Unit": "Count"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Sum": 181710.3776,
+    "Unit": "Count"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/Lambda",
+  "MetricName": "Duration",
+  "Dimensions": [
+   {
+    "Name": "FunctionName",
+    "Value": "platform-log-shipper"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Milliseconds",
+  "Label": "Duration",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 131.6781,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 126.9129,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 137.4362,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 130.7846,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 148.3769,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 134.2384,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 142.8297,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 152.0755,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 131.9193,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 148.7075,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 129.2637,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 150.9715,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 152.5828,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 129.6927,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 145.9185,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 141.2958,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 136.1012,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 134.5831,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 147.5409,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 136.2503,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 133.7855,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 141.9182,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 150.6971,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 138.1594,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 146.397,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 149.2544,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 134.8924,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 136.8067,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 130.5341,
+    "Unit": "Milliseconds"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 151.6006,
+    "Unit": "Milliseconds"
+   }
+  ]
+ },
+ {
+  "Namespace": "AWS/S3",
+  "MetricName": "BucketSizeBytes",
+  "Dimensions": [
+   {
+    "Name": "BucketName",
+    "Value": "platform-artifacts"
+   },
+   {
+    "Name": "StorageType",
+    "Value": "StandardStorage"
+   }
+  ],
+  "Statistic": "Average",
+  "Unit": "Bytes",
+  "Label": "BucketSizeBytes",
+  "Datapoints": [
+   {
+    "Timestamp": "2026-09-22T00:00:00Z",
+    "Average": 3395000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-23T00:00:00Z",
+    "Average": 3398500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-24T00:00:00Z",
+    "Average": 3402000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-25T00:00:00Z",
+    "Average": 3405500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-26T00:00:00Z",
+    "Average": 3409000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-27T00:00:00Z",
+    "Average": 3412500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-28T00:00:00Z",
+    "Average": 3416000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-29T00:00:00Z",
+    "Average": 3419500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-09-30T00:00:00Z",
+    "Average": 3423000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-01T00:00:00Z",
+    "Average": 3426500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-02T00:00:00Z",
+    "Average": 3430000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-03T00:00:00Z",
+    "Average": 3433500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-04T00:00:00Z",
+    "Average": 3437000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-05T00:00:00Z",
+    "Average": 3440500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-06T00:00:00Z",
+    "Average": 3444000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-07T00:00:00Z",
+    "Average": 3447500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-08T00:00:00Z",
+    "Average": 3451000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-09T00:00:00Z",
+    "Average": 3454500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-10T00:00:00Z",
+    "Average": 3458000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-11T00:00:00Z",
+    "Average": 3461500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-12T00:00:00Z",
+    "Average": 3465000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-13T00:00:00Z",
+    "Average": 3468500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-14T00:00:00Z",
+    "Average": 3472000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-15T00:00:00Z",
+    "Average": 3475500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-16T00:00:00Z",
+    "Average": 3479000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-17T00:00:00Z",
+    "Average": 3482500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-18T00:00:00Z",
+    "Average": 3486000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-19T00:00:00Z",
+    "Average": 3489500000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-20T00:00:00Z",
+    "Average": 3493000000000.0,
+    "Unit": "Bytes"
+   },
+   {
+    "Timestamp": "2026-10-21T00:00:00Z",
+    "Average": 3496500000000.0,
+    "Unit": "Bytes"
+   }
+  ]
+ }
+]

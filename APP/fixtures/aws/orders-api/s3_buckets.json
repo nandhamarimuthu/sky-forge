@@ -1,0 +1,17 @@
+{
+ "Buckets": [
+  {
+   "Name": "orders-api-exports",
+   "CreationDate": "2024-10-22T00:00:00Z",
+   "Acl": "private",
+   "LifecycleRules": null,
+   "Tags": {
+    "Project": "orders-api"
+   },
+   "StorageClassAnalysis": {
+    "infrequent_access_ratio": 0.85,
+    "observation_days": 90
+   }
+  }
+ ]
+}

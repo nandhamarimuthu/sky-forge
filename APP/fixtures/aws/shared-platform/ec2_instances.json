@@ -1,0 +1,112 @@
+{
+ "Reservations": [
+  {
+   "ReservationId": "r-d1fa1f8b0d73d793f",
+   "OwnerId": "456789012345",
+   "Instances": [
+    {
+     "InstanceId": "i-19b95f239ae97d9db",
+     "InstanceType": "m5.xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-09-11T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.171.217",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "platform-api-gateway"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-6efb2782309bad795",
+   "OwnerId": "456789012345",
+   "Instances": [
+    {
+     "InstanceId": "i-364be72a03a37323d",
+     "InstanceType": "c5.xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-09-28T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.173.147",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "platform-ci-runner"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-08a6620127b7ad768",
+   "OwnerId": "456789012345",
+   "Instances": [
+    {
+     "InstanceId": "i-34981b79c1aafe1fa",
+     "InstanceType": "m5.large",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2026-02-12T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-2a"
+     },
+     "PrivateIpAddress": "10.0.87.155",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "platform-old-jenkins"
+      },
+      {
+       "Key": "Environment",
+       "Value": "staging"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  }
+ ]
+}

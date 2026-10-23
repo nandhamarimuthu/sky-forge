@@ -1,0 +1,60 @@
+{
+ "LoadBalancers": [
+  {
+   "LoadBalancerArn": "arn:aws:elasticloadbalancing:eu-west-2:210987654321:loadbalancer/app/demo-shop-alb/7674ef3b170929ac",
+   "LoadBalancerName": "demo-shop-alb",
+   "Type": "application",
+   "Scheme": "internet-facing",
+   "State": {
+    "Code": "active"
+   },
+   "CreatedTime": "2025-11-26T00:00:00Z",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-alb"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "LoadBalancerArn": "arn:aws:elasticloadbalancing:eu-west-2:210987654321:loadbalancer/app/demo-shop-old-alb/20dff7010ac82c22",
+   "LoadBalancerName": "demo-shop-old-alb",
+   "Type": "application",
+   "Scheme": "internet-facing",
+   "State": {
+    "Code": "active"
+   },
+   "CreatedTime": "2025-11-26T00:00:00Z",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-old-alb"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  }
+ ]
+}

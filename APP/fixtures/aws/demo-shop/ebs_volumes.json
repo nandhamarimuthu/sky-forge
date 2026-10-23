@@ -1,0 +1,230 @@
+{
+ "Volumes": [
+  {
+   "VolumeId": "vol-ed2df2c206bba8d21",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-8dda1494c73cf256d",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-api-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-eb3257ddacabc1222",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-f4fd26ec4b372c56b",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-worker-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-f80b68be557ef69aa",
+   "Size": 100,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-570dee6930981abb6",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-legacy-batch-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "staging"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-bc728d4205d3068a3",
+   "Size": 20,
+   "VolumeType": "gp3",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": true,
+   "Attachments": [
+    {
+     "InstanceId": "i-3ebff2ec167c1e0bc",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-bastion-root"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-8292df063ad20b0d0",
+   "Size": 500,
+   "VolumeType": "gp2",
+   "State": "available",
+   "CreateTime": "2025-11-16T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-old-data"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-d7c1f943c916658f5",
+   "Size": 200,
+   "VolumeType": "gp3",
+   "State": "available",
+   "CreateTime": "2026-06-19T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": true,
+   "Attachments": [],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-migration-scratch"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "VolumeId": "vol-5062c8cac5d959e33",
+   "Size": 300,
+   "VolumeType": "gp2",
+   "State": "in-use",
+   "CreateTime": "2026-03-06T00:00:00Z",
+   "AvailabilityZone": "eu-west-2a",
+   "Encrypted": false,
+   "Attachments": [
+    {
+     "InstanceId": "i-8dda1494c73cf256d",
+     "Device": "/dev/xvda",
+     "State": "attached"
+    }
+   ],
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-api-data"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  }
+ ]
+}

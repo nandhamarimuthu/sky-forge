@@ -1,0 +1,66 @@
+{
+ "DBInstances": [
+  {
+   "DBInstanceIdentifier": "orders-api-db",
+   "DBInstanceArn": "arn:aws:rds:eu-west-1:345678901234:db:orders-api-db",
+   "DBInstanceClass": "db.m5.xlarge",
+   "Engine": "postgres",
+   "EngineVersion": "15.7",
+   "DBInstanceStatus": "available",
+   "MultiAZ": true,
+   "AllocatedStorage": 500,
+   "StorageType": "gp2",
+   "StorageEncrypted": true,
+   "PubliclyAccessible": false,
+   "TagList": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-db"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  },
+  {
+   "DBInstanceIdentifier": "orders-api-reporting",
+   "DBInstanceArn": "arn:aws:rds:eu-west-1:345678901234:db:orders-api-reporting",
+   "DBInstanceClass": "db.r5.large",
+   "Engine": "postgres",
+   "EngineVersion": "15.7",
+   "DBInstanceStatus": "available",
+   "MultiAZ": false,
+   "AllocatedStorage": 300,
+   "StorageType": "gp2",
+   "StorageEncrypted": true,
+   "PubliclyAccessible": false,
+   "TagList": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-reporting"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  }
+ ]
+}

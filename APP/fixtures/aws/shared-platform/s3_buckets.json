@@ -1,0 +1,15 @@
+{
+ "Buckets": [
+  {
+   "Name": "platform-artifacts",
+   "CreationDate": "2024-10-22T00:00:00Z",
+   "Acl": "private",
+   "LifecycleRules": null,
+   "Tags": {},
+   "StorageClassAnalysis": {
+    "infrequent_access_ratio": 0.8,
+    "observation_days": 90
+   }
+  }
+ ]
+}

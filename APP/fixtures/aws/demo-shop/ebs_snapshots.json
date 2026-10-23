@@ -1,0 +1,79 @@
+{
+ "Snapshots": [
+  {
+   "SnapshotId": "snap-6a625161fd0f5e23d",
+   "VolumeSize": 400,
+   "State": "completed",
+   "StartTime": "2025-09-07T00:00:00Z",
+   "Description": "Backup of demo-shop-db-2025-q3",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-db-2025-q3"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "SnapshotId": "snap-6a29b728efdb2db3b",
+   "VolumeSize": 100,
+   "State": "completed",
+   "StartTime": "2026-02-24T00:00:00Z",
+   "Description": "Backup of demo-shop-api-pre-upgrade",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-api-pre-upgrade"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  },
+  {
+   "SnapshotId": "snap-d7abfee3c8ce7b4e9",
+   "VolumeSize": 100,
+   "State": "completed",
+   "StartTime": "2026-10-16T00:00:00Z",
+   "Description": "Backup of demo-shop-api-weekly",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "demo-shop-api-weekly"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "demo-shop"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+{
+ "Snapshots": [
+  {
+   "SnapshotId": "snap-7182559048237dd9e",
+   "VolumeSize": 800,
+   "State": "completed",
+   "StartTime": "2025-09-17T00:00:00Z",
+   "Description": "Backup of platform-jenkins-final",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "platform-jenkins-final"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    }
+   ]
+  }
+ ]
+}

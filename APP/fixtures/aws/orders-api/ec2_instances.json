@@ -1,0 +1,125 @@
+{
+ "Reservations": [
+  {
+   "ReservationId": "r-7b58b2eb69409e2e5",
+   "OwnerId": "345678901234",
+   "Instances": [
+    {
+     "InstanceId": "i-fc7859faeecc3f80c",
+     "InstanceType": "c5.2xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2026-02-26T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-1a"
+     },
+     "PrivateIpAddress": "10.0.229.214",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "orders-api-web"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "orders-api"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX",
+     "PublicIpAddress": "18.135.5.152"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-e2c2edfbc6a801da0",
+   "OwnerId": "345678901234",
+   "Instances": [
+    {
+     "InstanceId": "i-f46107d604d5b20df",
+     "InstanceType": "r5.xlarge",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2026-01-31T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-1b"
+     },
+     "PrivateIpAddress": "10.0.42.101",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "orders-api-worker"
+      },
+      {
+       "Key": "Environment",
+       "Value": "prod"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "orders-api"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  },
+  {
+   "ReservationId": "r-40e77605613b7db89",
+   "OwnerId": "345678901234",
+   "Instances": [
+    {
+     "InstanceId": "i-14027b0b8f83a272a",
+     "InstanceType": "m5.large",
+     "ImageId": "ami-0c1c30571d2dae5c9",
+     "State": {
+      "Code": 16,
+      "Name": "running"
+     },
+     "LaunchTime": "2025-05-27T00:00:00Z",
+     "Placement": {
+      "AvailabilityZone": "eu-west-1a"
+     },
+     "PrivateIpAddress": "10.0.150.22",
+     "Tags": [
+      {
+       "Key": "Name",
+       "Value": "orders-api-staging-replica"
+      },
+      {
+       "Key": "Environment",
+       "Value": "staging"
+      },
+      {
+       "Key": "ManagedBy",
+       "Value": "terraform"
+      },
+      {
+       "Key": "Project",
+       "Value": "orders-api"
+      }
+     ],
+     "Architecture": "x86_64",
+     "PlatformDetails": "Linux/UNIX"
+    }
+   ]
+  }
+ ]
+}

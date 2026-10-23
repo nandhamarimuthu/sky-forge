@@ -1,0 +1,32 @@
+{
+ "LoadBalancers": [
+  {
+   "LoadBalancerArn": "arn:aws:elasticloadbalancing:eu-west-1:345678901234:loadbalancer/app/orders-api-alb/6f263f519edfd967",
+   "LoadBalancerName": "orders-api-alb",
+   "Type": "application",
+   "Scheme": "internet-facing",
+   "State": {
+    "Code": "active"
+   },
+   "CreatedTime": "2025-11-26T00:00:00Z",
+   "Tags": [
+    {
+     "Key": "Name",
+     "Value": "orders-api-alb"
+    },
+    {
+     "Key": "Environment",
+     "Value": "prod"
+    },
+    {
+     "Key": "ManagedBy",
+     "Value": "terraform"
+    },
+    {
+     "Key": "Project",
+     "Value": "orders-api"
+    }
+   ]
+  }
+ ]
+}

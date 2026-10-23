@@ -1,0 +1,41 @@
+{
+ "Buckets": [
+  {
+   "Name": "demo-shop-assets",
+   "CreationDate": "2024-10-22T00:00:00Z",
+   "Acl": "public-read",
+   "LifecycleRules": null,
+   "Tags": {
+    "Project": "demo-shop"
+   },
+   "StorageClassAnalysis": {
+    "infrequent_access_ratio": 0.72,
+    "observation_days": 90
+   }
+  },
+  {
+   "Name": "demo-shop-logs",
+   "CreationDate": "2024-10-22T00:00:00Z",
+   "Acl": "private",
+   "LifecycleRules": [
+    {
+     "ID": "expire-old",
+     "Status": "Enabled",
+     "Transitions": [
+      {
+       "Days": 30,
+       "StorageClass": "STANDARD_IA"
+      }
+     ]
+    }
+   ],
+   "Tags": {
+    "Project": "demo-shop"
+   },
+   "StorageClassAnalysis": {
+    "infrequent_access_ratio": 0.91,
+    "observation_days": 90
+   }
+  }
+ ]
+}

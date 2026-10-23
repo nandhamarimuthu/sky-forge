@@ -1,0 +1,15 @@
+name: ci
+on:
+  issue_comment:
+    types: [created]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log trigger
+        run: echo "Triggered by ${{ github.event.issue.title }}"
+      - run: pip install -r requirements.txt pytest && pytest
