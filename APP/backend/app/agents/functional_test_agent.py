@@ -142,7 +142,7 @@ class FunctionalTestAgent(BaseAgent):
     id = "functional_test"
     name = "Functional Automation"
     code = "Functional Automation"
-    description = ("Infers HTTP journeys in any supported stack and generates/executes functional scenarios "
+    description = ("Infers HTTP journeys from the codebase, then generates and executes functional scenarios "
                    "against an in-process client.")
     allowed_tools = frozenset({"repo.read", "sandbox.execute", "terraform.parse"})
 

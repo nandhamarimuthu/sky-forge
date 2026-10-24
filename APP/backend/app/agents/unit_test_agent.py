@@ -348,8 +348,8 @@ class UnitTestAgent(BaseAgent):
     id = "unit_test"
     name = "Unit Test & Coverage"
     code = "Unit Test & Coverage"
-    description = ("Measures coverage in a sandbox, generates validated unit tests for uncovered logic in any "
-                   "language, and mocks AWS from the repository's own Terraform.")
+    description = ("Measures coverage in a sandbox, then generates validated unit tests for the uncovered logic "
+                   "in any supported language.")
     allowed_tools = frozenset({"repo.read", "static.radon", "sandbox.execute", "llm.generate", "terraform.parse"})
 
     def run(self, ctx: AgentContext) -> AgentResult:

@@ -44,7 +44,7 @@ export function OverviewPage() {
             <Kpi label="Unit coverage" value={data.coverage_avg != null ? `${data.coverage_avg}%` : "—"} c="var(--orchid)" bg="var(--orchid-t)"
               sub={passRate != null ? <><b>{tests.passed}/{tests.total}</b> tests passing ({passRate}%)</> : "No measured test runs yet"} />
             <Kpi label="AWS spend · 30d" value={money(data.spend_30d)} c="var(--teal)" bg="var(--teal-t)"
-              sub={<>{data.spend_simulated ? <span className="tag tag-sim">simulated</span> : "measured"} · <b>{money(data.estimated_monthly_savings)}</b>/mo savings</>} />
+              sub={<><b>{money(data.estimated_monthly_savings)}</b>/mo savings</>} />
             <Kpi label="Code health" value={data.health_avg ?? "—"} c="#C98F00" bg="var(--sun-t)"
               sub={<><b>{data.by_status?.verified ?? 0}</b> fixes verified</>} />
           </section>
@@ -53,7 +53,6 @@ export function OverviewPage() {
             <div className="card">
               <div className="card-head">
                 <div><h2>Cloud spend trend</h2><p className="muted">Daily AWS cost across projects (60 days)</p></div>
-                {data.spend_simulated && <span className="tag tag-sim">simulated data</span>}
               </div>
               {data.spend_series.length ? (
                 <ResponsiveContainer width="100%" height={230}>

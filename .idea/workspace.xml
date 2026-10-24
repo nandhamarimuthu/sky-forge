@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="977bae5c-dc7b-4533-86df-bdc819b7ec49" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/adapters/aws/iac_dump.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/adapters/aws/iac_dump.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/aws_optimizer_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/aws_optimizer_agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/code_health_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/code_health_agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/functional_test_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/functional_test_agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/security_guardrails.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/security_guardrails.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/unit_test_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/unit_test_agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/backend/app/agents/vulnerability_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/APP/backend/app/agents/vulnerability_agent.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/components/common.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/components/common.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/features/agents.ts" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/features/agents.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/layouts/AppLayout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/layouts/AppLayout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/pages/AgentCenter.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/pages/AgentCenter.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/pages/Aws.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/pages/Aws.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/pages/Overview.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/pages/Overview.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/pages/Settings.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/pages/Settings.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/pages/Testing.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/pages/Testing.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/APP/frontend/src/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/APP/frontend/src/styles.css" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_/Users/nmt133/Documents/sky-forge" value="3L8sLXHIBga87UgUwuoMJe2UIee" />
+      <entry key="_/Users/smj143/Documents/GitHub-latest/sky-forge" value="3L62zEH0mqMoY4FfmexLP00Eraj" />
+    </persistenceIdMap>
+  </component>
+  <component name="CopilotUserSelectedChatMode">
+    <option name="chatModeId" value="Agent" />
+  </component>
+  <component name="CopilotUserSelectedModel">
+    <selectedModels>
+      <entry key="agent-panel" value="Claude Opus 5" />
+      <entry key="chat-panel" value="Claude Opus 5" />
+    </selectedModels>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;sanjayms03&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/nandhamarimuthu/sky-forge&quot;,
+    &quot;accountId&quot;: &quot;f62c1f46-3c5c-42f4-be71-61c267aef7b3&quot;
+  }
+}</component>
+  <component name="ProjectCodeStyleSettingsMigration">
+    <option name="version" value="2" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 8,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3L62zEH0mqMoY4FfmexLP00Eraj" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "SHELLCHECK.PATH": "I do mind",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "master",
+    "junie.onboarding.icon.badge.shown": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/nmt133/Documents/sky-forge/DOCS",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "to.speed.mode.migration.done": "true",
+    "ts.external.directory.path": "/Users/nmt133/Documents/sky-forge/APP/frontend/node_modules/typescript/lib",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/DOCS" />
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-PY-253.32098.74" />
+        <option value="bundled-python-sdk-1cd77e80b48f-6d6dccd035ac-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.32098.74" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="977bae5c-dc7b-4533-86df-bdc819b7ec49" name="Changes" comment="" />
+      <created>1792760456626</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1792760456626</updated>
+      <workItem from="1792846974854" duration="6052000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="github-copilot-workspace">
+    <instructionFileLocations>
+      <option value=".github/instructions" />
+    </instructionFileLocations>
+    <promptFileLocations>
+      <option value=".github/prompts" />
+    </promptFileLocations>
+  </component>
+</project>

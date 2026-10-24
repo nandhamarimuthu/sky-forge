@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
+import math
+import os
 import re
 from datetime import date, timedelta
 from pathlib import Path
@@ -75,6 +78,22 @@ def _days(end: date, count: int) -> list[date]:
     return [end - timedelta(days=i) for i in range(count - 1, -1, -1)]
 
 
+def _daily_factors(resource_id: str, days: list[date]) -> list[float]:
+    """Deterministic per-day usage profile (weekday/weekend shape + jitter), normalised to average 1.0.
+
+    Keeps the period total equal to the list price while making the daily series realistic instead of flat.
+    """
+    base = _seed(resource_id)
+    factors: list[float] = []
+    for i, day in enumerate(days):
+        weekend = 0.72 if day.weekday() >= 5 else 1.0
+        wave = 1 + 0.08 * math.sin((base % 7 + i) / 3.2)
+        jitter = 0.85 + (_seed(f"{resource_id}:{day.isoformat()}") % 1000) / 999 * 0.30
+        factors.append(weekend * wave * jitter)
+    mean = sum(factors) / len(factors)
+    return [f / mean for f in factors]
+
+
 def _metric(resource_id: str, metric: str, unit: str, stat: str, values: list[tuple[date, float]]) -> dict[str, Any]:
     dim = {"ec2": "InstanceId"}.get("", "")  # dimension name is informational only; the adapter reads the value
     return {"MetricName": metric, "Unit": unit, "Statistic": stat,
@@ -112,14 +131,16 @@ class IacDumpBuilder:
             return
         daily = monthly / PERIOD_DAYS
         project = next((t["Value"] for t in tags if t["Key"] == "Project"), "")
-        for day in _days(self.end, PERIOD_DAYS):
+        days = _days(self.end, PERIOD_DAYS)
+        factors = _daily_factors(resource_id, days)
+        for day, factor in zip(days, factors):
             self.cur_rows.append({
                 "identity/LineItemId": f"{resource_id}-{day.isoformat()}",
                 "bill/BillingPeriodStartDate": self.start.isoformat(),
                 "lineItem/UsageStartDate": f"{day.isoformat()}T00:00:00Z",
                 "lineItem/ProductCode": PRODUCT_CODE.get(service, "AmazonEC2"),
                 "lineItem/ResourceId": resource_id,
-                "lineItem/UnblendedCost": f"{daily:.6f}",
+                "lineItem/UnblendedCost": f"{daily * factor:.6f}",
                 "lineItem/CurrencyCode": "USD",
                 "product/ProductName": service,
                 "product/region": self.region,
@@ -322,6 +343,13 @@ CUR_COLUMNS = ["identity/LineItemId", "bill/BillingPeriodStartDate", "lineItem/U
                "product/ProductName", "product/region", "resourceTags/user:Project"]
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Readers may parse a dump while it is regenerated; swap files in atomically to avoid torn reads."""
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def generate_dump(tf: list[TfResource], dest: Path, project_tag: str = "", region: str = "eu-west-2",
                   account_id: str = "000000000000") -> Path:
     """Write current Terraform inventory, even when empty or no declared resource has a known price."""
@@ -329,9 +357,10 @@ def generate_dump(tf: list[TfResource], dest: Path, project_tag: str = "", regio
     files = builder.build()
     dest.mkdir(parents=True, exist_ok=True)
     for name, payload in files.items():
-        (dest / name).write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-    with (dest / "cost_and_usage.csv").open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=CUR_COLUMNS)
-        writer.writeheader()
-        writer.writerows(builder.cur_rows)
+        _atomic_write(dest / name, json.dumps(payload, indent=2, default=str))
+    buf = io.StringIO(newline="")
+    writer = csv.DictWriter(buf, fieldnames=CUR_COLUMNS)
+    writer.writeheader()
+    writer.writerows(builder.cur_rows)
+    _atomic_write(dest / "cost_and_usage.csv", buf.getvalue())
     return dest

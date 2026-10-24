@@ -7,6 +7,7 @@ import { useFindingDrawer } from "../components/FindingDrawer";
 import { PageHead } from "../components/PageHead";
 import { ProjectPicker } from "../components/ProjectPicker";
 import { useToast } from "../components/Toast";
+import { formatDuration } from "../features/agents";
 import type { TestRun } from "../types";
 
 export function TestingPage() {
@@ -94,7 +95,7 @@ export function TestingPage() {
                           <td>{r.status === "not_executed" ? <span className="dim">{r.details?.reason ?? "not executed"}</span> :
                             <><b style={{ color: "#0B8A5E" }}>{r.passed}</b> / {r.total}{r.failed + r.errors > 0 && <span style={{ color: "var(--tomato)" }}> · {r.failed + r.errors} failing</span>}</>}</td>
                           <td>{r.coverage_after != null ? <>{r.coverage_before != null && <span className="dim">{r.coverage_before}% → </span>}<b>{r.coverage_after}%</b></> : "—"}</td>
-                          <td>{r.duration_s != null ? `${r.duration_s}s` : "—"}</td>
+                          <td>{formatDuration(r.duration_s)}</td>
                           <td className="dim"><TimeAgo iso={r.created_at} /></td>
                           <td onClick={(e) => e.stopPropagation()}>
                             {r.report_artifact_id && (

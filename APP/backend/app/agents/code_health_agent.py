@@ -42,7 +42,8 @@ class CodeHealthAgent(BaseAgent):
     id = "code_health"
     name = "Code Health"
     code = "Code Health"
-    description = "Measures complexity, duplication, lint and maintainability; proposes safe refactors."
+    description = ("Measures complexity, duplication, lint and maintainability, then proposes safe refactors "
+                   "for the riskiest files.")
     allowed_tools = frozenset({"repo.read", "static.ruff", "static.radon"})
 
     def run(self, ctx: AgentContext) -> AgentResult:

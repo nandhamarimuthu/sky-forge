@@ -56,7 +56,8 @@ class AwsOptimizerAgent(BaseAgent):
     id = "aws_optimizer"
     name = "AWS Cost Optimiser"
     code = "AWS Cost Optimiser"
-    description = "Read-only analysis of AWS inventory, utilisation and spend to recommend savings."
+    description = ("Analyses AWS inventory, utilisation and spend read-only, then recommends right-sizing and "
+                   "cleanup savings actions.")
     allowed_tools = frozenset({"repo.read", "terraform.parse", "aws.read"})
 
     def run(self, ctx: AgentContext) -> AgentResult:

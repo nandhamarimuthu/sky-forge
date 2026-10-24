@@ -527,7 +527,7 @@ class SecurityGuardrailsAgent(BaseAgent):
     id = "guardrails"
     name = "Security Guardrails"
     code = "Security Guardrails"
-    description = ("Deterministic policy engine: secrets, injection risks, insecure IaC/CI, and validation of every "
+    description = ("Applies deterministic policy to secrets, injection and IaC risks, then validates every "
                    "proposed change before approval.")
     allowed_tools = frozenset({"repo.read", "terraform.parse"})
 

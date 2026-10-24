@@ -19,7 +19,7 @@ function DangerZone() {
         <div>
           <h2>Danger zone</h2>
           <p className="muted">Stops running scans and permanently deletes every project, scan, finding, test run, fix branch,
-            artifact, uploaded AWS dump and audit event. Settings and bundled samples are kept.</p>
+            artifact and audit event. Settings are kept.</p>
         </div>
       </div>
       <div className="row wrap">
@@ -166,7 +166,7 @@ export function SettingsPage() {
         <dl className="kv">
           <dt>Vulnerability DB</dt><dd className="mono">{s.integrations.osv}</dd>
           <dt>Docker sandbox</dt><dd>{s.integrations.docker_sandbox ? `available · ${s.integrations.sandbox_image}` : "unavailable — test execution refused"}</dd>
-          <dt>AWS</dt><dd>Repository Terraform only; dynamically generated cost estimates, never bundled or uploaded dumps</dd>
+          <dt>AWS</dt><dd>Repository Terraform only; dynamically generated cost estimates</dd>
           <dt>AWS regions</dt><dd className="mono">{s.integrations.aws_regions.join(", ")}</dd>
           <dt>AWS services</dt><dd className="mono">{s.integrations.aws_services.join(", ")}</dd>
           <dt>Git hosts</dt><dd className="mono">{s.integrations.git_hosts.join(", ")}</dd>

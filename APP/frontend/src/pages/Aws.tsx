@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAwsCost, useAwsResources } from "../api/hooks";
-import { Empty, ErrorState, Kpi, Loading, Sev, SimBanner, Status } from "../components/common";
+import { Empty, ErrorState, Kpi, Loading, Sev, Status } from "../components/common";
 import { useFindingDrawer } from "../components/FindingDrawer";
 import { PageHead, useSelectedProject } from "../components/PageHead";
 import { ProjectPicker } from "../components/ProjectPicker";
@@ -10,7 +10,7 @@ import { money } from "../features/agents";
 const COLORS = ["#9157FF", "#FF5A5A", "#0EB5A8", "#4361EE", "#FFAE1A", "#F2479A", "#16C47F", "#7D7A99"];
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-interface TerraformSource { region?: string; period_start?: string; period_end?: string; description?: string }
+interface TerraformSource { region?: string; period_start?: string; period_end?: string }
 
 function DataSource({ source, errors }: { source?: TerraformSource; errors: string[] }) {
   return (
@@ -21,7 +21,6 @@ function DataSource({ source, errors }: { source?: TerraformSource; errors: stri
           <div style={{ fontWeight: 700, marginTop: 4 }}>
             Generated from this repository · {source?.region ?? "?"} · {source?.period_start} → {source?.period_end}
           </div>
-          <div className="muted" style={{ fontSize: ".8rem" }}>{source?.description} Bundled and uploaded dumps are never used. Re-scan after Terraform changes to refresh recommendations.</div>
           {errors.length > 0 && <div className="error-box" style={{ marginTop: 8 }}>{errors.join("; ")}</div>}
         </div>
       </div>
@@ -52,12 +51,11 @@ export function AwsPage() {
         actions={<ProjectPicker value={project} onChange={setProject} />} />
       {!project ? <div className="card"><Empty title="Select a project" /></div> : cost.error ? <ErrorState error={cost.error} /> : !c ? <Loading rows={4} height={80} /> : (
         <>
-          <SimBanner show={c.simulated} />
           <DataSource source={c.source} errors={c.errors ?? []} />
           {c.missing_evidence?.length > 0 && <div className="banner info"><b>Missing evidence:</b> {c.missing_evidence.join("; ")}</div>}
           <section className="kpis">
             <Kpi label={c.measured_spend ? "Measured spend · 30d" : "Spend · 30d"} value={money(c.last_30_days)} c="var(--cobalt)" bg="var(--cobalt-t)"
-              sub={c.simulated ? <span className="tag tag-sim">simulated</span> : c.measured_spend ? (c.mode === "dump" ? "from Cost & Usage Report" : "Cost Explorer") : "estimated"} />
+              sub={c.measured_spend ? "from Cost & Usage Report" : "estimated"} />
             <Kpi label="Potential savings / mo" value={money(c.estimated_monthly_savings)} c="var(--mint)" bg="var(--mint-t)"
               sub={<><b>{money(c.estimated_monthly_savings * 12)}</b> per year</>} />
             <Kpi label="Resources" value={r?.items.length ?? "—"} c="var(--teal)" bg="var(--teal-t)" sub={r?.account ? `${r.account.account_id} · ${r.account.regions.join(", ")}` : ""} />
