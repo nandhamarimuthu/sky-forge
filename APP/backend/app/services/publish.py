@@ -10,10 +10,13 @@ to the default branch, and the token is read from the environment (never stored,
 
 from __future__ import annotations
 
+import threading
 import time
+from datetime import datetime
 from typing import Any
 
 import httpx
+import jwt
 from sqlalchemy.orm import Session
 
 from app.adapters.repository.git_repo import RepositoryError, run_git
@@ -26,6 +29,8 @@ from app.services.audit import audit
 from app.services.container import Container
 
 PUBLISHABLE = ("verified", "applied")
+_APP_TOKEN_LOCK = threading.Lock()
+_APP_TOKEN: tuple[str, float, str] | None = None
 
 
 class _GitHub:
@@ -55,48 +60,72 @@ class _GitHub:
         raise ApiError(504, "github_timeout", f"Repository {full} did not become available")
 
 
-def _token(c: Container, project: Project) -> str:
+def _token(c: Container, project: Project, prefer_app: bool = True) -> tuple[str, bool]:
     ref = (project.repository.token_secret_ref if project.repository else None) or c.settings.github_token_env
+    app_id = c.settings.github_app_id
+    installation_id = c.settings.github_app_installation_id
+    key_path = c.settings.github_app_private_key_path
     token = secret_from_env(ref)
+    if prefer_app and app_id and installation_id and key_path:
+        return _installation_token(c.settings.github_api_url, app_id, installation_id, key_path), True
     if not token:
         raise ApiError(422, "github_token_missing",
-                       f"Set {ref} (environment or .env) to a GitHub token with repo + pull request write access "
-                       "to enable pushing branches and opening PRs")
-    return token
+                       "Configure GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID and "
+                       "GITHUB_APP_PRIVATE_KEY_PATH, or set a GitHub token in GITHUB_TOKEN")
+    return token, False
+
+
+def _app_configured(c: Container) -> bool:
+    key_path = c.settings.github_app_private_key_path
+    return bool(c.settings.github_app_id and c.settings.github_app_installation_id and key_path and key_path.is_file())
 
 
 def publish_enabled(c: Container) -> bool:
-    return bool(secret_from_env(c.settings.github_token_env))
+    return _app_configured(c) or bool(secret_from_env(c.settings.github_token_env))
 
 
-def _coverage_section(finding: Finding, prop: RemediationProposal) -> list[str]:
-    """Extra PR context for coverage work: what the tests cover and how coverage moved."""
-    ev = finding.evidence or {}
-    before = ev.get("coverage_percent")
-    after = next((ch.get("coverage_after") for ch in (prop.verification or {}).get("checks", [])
-                  if ch.get("coverage_after") is not None), None)
-    lines = ["", "#### Test coverage"]
-    if before is not None:
-        lines.append(f"- `{finding.target}` line coverage before: **{before:.0f}%**")
-    if after is not None:
-        lines.append(f"- Measured in the SkyForge sandbox after these tests: **{after:.0f}%**")
-    targets = ev.get("coverage_targets") or []
-    if targets:
-        lines.append("- Previously uncovered code these tests exercise:")
-        lines += [f"  - `{t.get('function')}` (line {t.get('line')}, complexity {t.get('complexity')}) — "
-                  f"lines {t.get('missing_line_ranges') or '?'}" for t in targets[:8]]
-    lines.append(f"- Files added/changed: {', '.join(f'`{f}`' for f in list(prop.files)[:20]) or 'n/a'}")
-    return lines
+def _installation_token(api: str, app_id: str, installation_id: str, key_path: Any) -> str:
+    global _APP_TOKEN
+    cache_key = f"{app_id}:{installation_id}:{key_path}"
+    now = time.time()
+    with _APP_TOKEN_LOCK:
+        if _APP_TOKEN and _APP_TOKEN[2] == cache_key and _APP_TOKEN[1] > now + 60:
+            return _APP_TOKEN[0]
+        try:
+            private_key = key_path.read_text(encoding="utf-8")
+            app_jwt = jwt.encode({"iss": app_id, "iat": int(now) - 60, "exp": int(now) + 540}, private_key,
+                                 algorithm="RS256")
+        except (OSError, ValueError, jwt.PyJWTError) as exc:
+            raise ApiError(500, "github_app_key_invalid", "Could not read or sign with the configured GitHub App PEM") \
+                from exc
+        try:
+            response = httpx.post(
+                f"{api.rstrip('/')}/app/installations/{installation_id}/access_tokens",
+                headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json",
+                         "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "SkyForge-AI"}, timeout=30)
+        except httpx.HTTPError as exc:
+            raise ApiError(502, "github_unreachable", "Could not exchange GitHub App JWT for an installation token") \
+                from exc
+        if response.status_code not in (200, 201):
+            raise ApiError(422, "github_app_installation",
+                           f"GitHub App installation token request failed ({response.status_code})")
+        try:
+            data = response.json()
+            token = data["token"]
+            expires = datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00"))
+            expiry = expires.timestamp()
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ApiError(502, "github_app_response", "GitHub returned an invalid installation-token response") \
+                from exc
+        _APP_TOKEN = (token, expiry, cache_key)
+        return token
 
 
 def _body(finding: Finding, prop: RemediationProposal, approvers: list[str]) -> str:
     checks = (prop.verification or {}).get("checks", [])
     lines = [f"### {prop.title}", "", f"**Finding:** `{finding.id}` · {finding.severity} · `{finding.rule_id}`",
              f"**Target:** `{finding.target}`", "", finding.description[:1500], "",
-             f"**Recommendation:** {finding.recommendation[:800]}"]
-    if finding.category == "coverage" or prop.kind in ("test_addition", "functional_test"):
-        lines += _coverage_section(finding, prop)
-    lines += ["", "#### Verification"]
+             f"**Recommendation:** {finding.recommendation[:800]}", "", "#### Verification"]
     lines += [f"- {'✅' if ch.get('passed') else '❌'} {ch.get('name')}: {str(ch.get('detail', ''))[:200]}"
               for ch in checks] or ["- (no automated verification for this change type)"]
     lines += ["", f"Approved in SkyForge by: {', '.join(approvers) or 'n/a'}",
@@ -128,11 +157,18 @@ def open_pull_request(db: Session, c: Container, finding: Finding, prop: Remedia
     if not (wt / ".git").exists():
         raise ApiError(409, "workspace_missing", "The fix branch workspace no longer exists; re-apply the fix")
 
-    token = _token(c, project)
+    if repo.provider == "local-fixture" and _app_configured(c) and not secret_from_env(c.settings.github_token_env):
+        raise ApiError(422, "github_app_sample_repo",
+                       "A GitHub App installation token cannot create and install itself on a new sample repository. "
+                       "Create a private skyforge-<name> repository, install the App on it, and register that repo "
+                       "as a project; or configure GITHUB_TOKEN for sample-repo publishing.")
+    token, is_app = _token(c, project, prefer_app=repo.provider != "local-fixture")
     gh = _GitHub(c.settings.github_api_url, token)
-    login = gh.call("GET", "/user").json()["login"]
     mode: str
     if repo.provider == "local-fixture":
+        login = gh.call("GET", "/user").json().get("login")
+        if not login:
+            raise ApiError(502, "github_identity", "GitHub did not return the authenticated account name")
         target = f"{login}/skyforge-{repo.name}"
         r = gh.call("GET", f"/repos/{target}", ok=(200, 404))
         if r.status_code == 404:
@@ -143,7 +179,7 @@ def open_pull_request(db: Session, c: Container, finding: Finding, prop: Remedia
         mode = "sample-repo"
     else:
         upstream = gh.call("GET", f"/repos/{repo.owner}/{repo.name}").json()
-        if (upstream.get("permissions") or {}).get("push"):
+        if is_app or (upstream.get("permissions") or {}).get("push"):
             target, base, mode = f"{repo.owner}/{repo.name}", repo.branch or upstream["default_branch"], "direct"
         else:
             fork = gh.call("POST", f"/repos/{repo.owner}/{repo.name}/forks", json={}).json()

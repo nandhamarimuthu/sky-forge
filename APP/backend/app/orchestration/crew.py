@@ -1,8 +1,8 @@
-"""CrewAI orchestration of the explanation step, backed by the configured LLM (local Ollama or OpenAI).
+"""CrewAI orchestration of the explanation step, backed by a local Ollama model.
 
 Agents in the crew only *explain* already-validated findings. They have no tools, cannot modify files and their
-output is parsed as untrusted JSON. If CrewAI or the provider is unavailable, a direct provider call is attempted,
-and finally deterministic templates are used — the scan never depends on the LLM.
+output is parsed as untrusted JSON. If CrewAI or Ollama is unavailable, a direct Ollama call is attempted, and
+finally deterministic templates are used — the scan never depends on the LLM.
 """
 
 from __future__ import annotations
@@ -78,14 +78,13 @@ def explain_with_crew(llm: LLMService, findings: list[dict[str, Any]], batch_siz
     for f in findings:
         by_agent.setdefault(f["source_agent"], []).append(f)
     out: dict[str, str] = {}
-    engine: str = llm.provider
+    engine = "ollama"
     if llm.crewai_installed():
         try:
             out = _crew(llm, by_agent, batch_size)
-            engine = f"crewai+{llm.provider}"
+            engine = "crewai+ollama"
         except Exception as exc:  # noqa: BLE001 - CrewAI raises many error types; fall back safely
-            log.warning("CrewAI explanation failed (%s); falling back to direct %s call",
-                        type(exc).__name__, llm.provider)
+            log.warning("CrewAI explanation failed (%s); falling back to direct Ollama", type(exc).__name__)
     for agent_id, items in by_agent.items():
         missing = [f for f in items if f["id"] not in out]
         for i in range(0, len(missing), batch_size):
@@ -101,12 +100,7 @@ def _crew(llm: LLMService, by_agent: dict[str, list[dict[str, Any]]], batch_size
     os.environ["OTEL_SDK_DISABLED"] = "true"
     from crewai import LLM, Agent, Crew, Process, Task
 
-    if llm.provider == "openai":
-        os.environ.setdefault("OPENAI_API_KEY", llm.api_key or "")
-        model = LLM(model=f"openai/{llm.resolved_model()}", base_url=llm.settings.openai_base_url,
-                    api_key=llm.api_key, temperature=0.2)
-    else:
-        model = LLM(model=f"ollama/{llm.resolved_model()}", base_url=llm.settings.ollama_base_url, temperature=0.2)
+    model = LLM(model=f"ollama/{llm.resolved_model()}", base_url=llm.settings.ollama_base_url, temperature=0.2)
     agents, tasks, batches = [], [], []
     for agent_id, items in by_agent.items():
         role, goal = ROLE_BY_AGENT.get(agent_id, ("Engineer", "Explain findings"))

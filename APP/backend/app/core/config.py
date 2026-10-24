@@ -26,20 +26,17 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 300
     scan_rate_limit_per_minute: int = 10
 
-    # "ollama" runs a local model; "openai" calls the hosted OpenAI API (gpt-4o-mini by default).
-    llm_provider: Literal["ollama", "openai"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3"
-    openai_base_url: str = Field(default="https://api.openai.com/v1", pattern=r"^https://")
-    openai_model: str = "gpt-4o-mini"
-    # Env var holding the OpenAI API key; the key itself is never stored in settings or returned by the API.
-    openai_api_key_env: str = Field(default="OPENAI_API_KEY", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
     llm_enabled: bool = True
     llm_timeout_s: int = 90
 
     allowed_git_hosts: str = "github.com,gitlab.com,bitbucket.org"
     # Env var holding a GitHub token used to push fix branches / open draft PRs (projects may override per repo).
     github_token_env: str = Field(default="GITHUB_TOKEN", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
+    github_app_id: str | None = None
+    github_app_installation_id: str | None = None
+    github_app_private_key_path: Path | None = None
     github_api_url: str = Field(default="https://api.github.com", pattern=r"^https://")
     max_repo_mb: int = 300
     clone_timeout_s: int = 180

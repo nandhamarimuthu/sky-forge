@@ -16,7 +16,7 @@ import itertools
 import json
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from app.adapters.repository.git_repo import RepoWorkspace
@@ -24,6 +24,7 @@ from app.adapters.sandbox import DockerSandbox, SandboxResult
 from app.adapters.scanners.code_metrics import FunctionInfo, analyse_python_module, is_test_path, module_name_for
 from app.adapters.scanners.manifests import unified_diff
 from app.agents.base import AgentContext, BaseAgent
+from app.agents.polyglot_tests import run_polyglot_unit_tests
 from app.agents.security_guardrails import scan_generated_code
 from app.schemas.agents import AgentResult, ArtifactDraft, FindingDraft, ProposalDraft, TestRunDraft
 from app.services.llm import LLMService, wrap_untrusted
@@ -34,36 +35,11 @@ SIDE_EFFECT_NAME = re.compile(r"^(save|write|delete|remove|send|post|put|upload|
 SIDE_EFFECT_SRC = re.compile(r"\b(open\(|requests\.|httpx\.|urllib|subprocess|os\.system|os\.remove|shutil\.|socket|"
                              r"input\(|random\.|time\.time|datetime\.now|uuid|sqlite3|session\.|cursor|\.execute\(|"
                              r"print\(|logging\.|threading|asyncio|global )")
-# Web-framework context access: these only work inside a live request/app context, so calling the function directly
-# would pin an environmental error rather than real behaviour.
-REQUEST_CONTEXT_SRC = re.compile(r"\b(request\.|flask\.request|current_app|url_for\(|jsonify\(|render_template|"
-                                 r"redirect\(|make_response\(|send_file\(|abort\(|flash\(|g\.[a-z_]|Depends\(|"
-                                 r"HTTPException|self\.get_argument|rest_framework)")
 INT_NAMES = {"n", "num", "count", "i", "j", "k", "x", "y", "size", "limit", "index", "idx", "number", "age", "year",
              "times", "length", "width", "height", "depth", "level", "a", "b"}
 STR_NAMES = {"name", "text", "s", "string", "word", "msg", "message", "title", "key", "label", "value", "slug",
              "email", "username", "query", "prefix", "suffix", "sep", "char", "token", "line", "sentence"}
 LIST_NAMES = {"items", "values", "lst", "data", "numbers", "nums", "elements", "words", "arr", "array", "seq"}
-
-# Decorators that only *register* a function (web routes, CLI commands, task queues) and return it unchanged, so the
-# undecorated callable is still importable and directly testable. Handlers that actually need a request context are
-# filtered out separately by SIDE_EFFECT_SRC (`request.`, `session.`, `g.`, …).
-TRANSPARENT_DECORATOR = re.compile(
-    r"^(staticmethod|functools\.lru_cache|lru_cache|cache|functools\.cache)\b|"
-    r"^[\w.]*(app|application|router|api|bp|blueprint|mod|server|cli|celery|dramatiq|huey)[\w.]*\."
-    r"(route|get|post|put|patch|delete|head|options|api_route|websocket|command|group|task|shared_task|job)\b",
-    re.IGNORECASE)
-
-# Suffix heuristics for unannotated parameters, applied after the exact-name lookups above.
-NAME_SUFFIX_KINDS: tuple[tuple[str, str], ...] = (
-    ("_id", "int"), ("_count", "int"), ("_num", "int"), ("_number", "int"), ("_index", "int"), ("_idx", "int"),
-    ("_size", "int"), ("_len", "int"), ("_length", "int"), ("_total", "int"), ("_offset", "int"), ("_limit", "int"),
-    ("_name", "str"), ("_text", "str"), ("_str", "str"), ("_msg", "str"), ("_message", "str"), ("_url", "str"),
-    ("_path", "str"), ("_key", "str"), ("_slug", "str"), ("_email", "str"), ("_title", "str"), ("_code", "str"),
-    ("_items", "list"), ("_list", "list"), ("_values", "list"), ("_names", "list"), ("_rows", "list"),
-    ("_map", "dict"), ("_dict", "dict"), ("_config", "dict"), ("_options", "dict"), ("_params", "dict"),
-    ("_flag", "bool"), ("_enabled", "bool"), ("is_", "bool"), ("has_", "bool"),
-)
 
 SAMPLES: dict[str, list[Any]] = {
     "int": [0, 1, -3, 12], "float": [0.0, 2.5, -1.25], "str": ["", "abc", "Hello World"], "bool": [True, False],
@@ -134,9 +110,6 @@ def _kind(annotation: str | None, name: str) -> str | None:
         return "str"
     if lname in LIST_NAMES:
         return "list"
-    for affix, kind in NAME_SUFFIX_KINDS:
-        if (lname.startswith(affix) if affix.endswith("_") else lname.endswith(affix)):
-            return kind
     return None
 
 
@@ -166,142 +139,8 @@ def build_cases(fn: FunctionInfo, limit: int = 6) -> list[list[str]] | None:
     return [list(c) for c in combos[::step][:limit]]
 
 
-GENERATED_DIR = "skyforge_tests"  # Own top-level test dir: never inherits the repo's test package/conftest.
-
-
-def generated_test_path(module: str, suffix: str = "") -> str:
-    return f"{GENERATED_DIR}/test_{_safe_ident(module)}{('_' + _safe_ident(suffix)) if suffix else ''}.py"
-
-
-def module_mutable_globals(source: str) -> set[str]:
-    """Names bound at module scope to a mutable literal (list/dict/set).
-
-    A function that reads or writes one of these is not safe to pin with a characterization test: any other test in
-    the same process can mutate the global first and the expectation becomes order-dependent.
-    """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return set()
-    names: set[str] = set()
-    for node in tree.body:
-        targets: list[ast.expr] = []
-        value: ast.expr | None = None
-        if isinstance(node, ast.Assign):
-            targets, value = list(node.targets), node.value
-        elif isinstance(node, ast.AnnAssign) and node.value is not None:
-            targets, value = [node.target], node.value
-        if value is None:
-            continue
-        mutable = isinstance(value, ast.List | ast.Dict | ast.Set | ast.ListComp | ast.DictComp | ast.SetComp) or (
-            isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
-            and value.func.id in ("list", "dict", "set", "defaultdict", "deque", "Counter", "OrderedDict"))
-        if mutable:
-            names |= {t.id for t in targets if isinstance(t, ast.Name)}
-    return names
-
-
-def is_route_handler(fn: FunctionInfo) -> bool:
-    """True when the function is only *registered* by its decorator (Flask/FastAPI route, CLI command, task)."""
-    return any(TRANSPARENT_DECORATOR.match(d) and "." in d.split("(")[0] for d in fn.decorators)
-
-
 def _safe_ident(s: str) -> str:
     return re.sub(r"[^0-9a-zA-Z_]", "_", s)[:60]
-
-
-def line_ranges(lines: list[int], max_ranges: int = 6) -> str:
-    """Collapse sorted line numbers into human-readable ranges, e.g. '12-18, 24, 31-33'."""
-    if not lines:
-        return ""
-    ordered = sorted(set(lines))
-    ranges: list[tuple[int, int]] = [(ordered[0], ordered[0])]
-    for n in ordered[1:]:
-        if n == ranges[-1][1] + 1:
-            ranges[-1] = (ranges[-1][0], n)
-        else:
-            ranges.append((n, n))
-    shown = [f"{a}-{b}" if a != b else str(a) for a, b in ranges[:max_ranges]]
-    if len(ranges) > max_ranges:
-        shown.append(f"+{len(ranges) - max_ranges} more")
-    return ", ".join(shown)
-
-
-@dataclass
-class CoverageGap:
-    """An uncovered region of a function, with the data needed to prioritise writing a test for it."""
-
-    function: FunctionInfo
-    missing: list[int]
-    statements: int
-
-    @property
-    def missing_count(self) -> int:
-        return len(self.missing)
-
-    @property
-    def score(self) -> float:
-        """Priority = uncovered lines weighted by branching complexity (risk × reward)."""
-        return self.missing_count * (1 + self.function.complexity / 5)
-
-
-def function_gaps(functions: list[FunctionInfo], missing: list[int]) -> list[CoverageGap]:
-    missing_set = set(missing)
-    gaps: list[CoverageGap] = []
-    for f in functions:
-        span = range(f.line, f.end_line + 1)
-        hit = sorted(n for n in span if n in missing_set)
-        if hit:
-            gaps.append(CoverageGap(function=f, missing=hit, statements=len(span)))
-    gaps.sort(key=lambda g: -g.score)
-    return gaps
-
-
-def _suggest_cases(f: FunctionInfo) -> list[str]:
-    """Suggest the input classes worth covering, derived from the signature and body shape."""
-    hints: list[str] = []
-    for a in f.args:
-        if a["name"].startswith(("*", "self", "cls")):
-            continue
-        kind = _kind(a.get("annotation"), a["name"])
-        if kind in ("int", "float"):
-            hints.append(f"`{a['name']}` = 0, a negative value and a large value")
-        elif kind == "str":
-            hints.append(f"`{a['name']}` = empty string, typical text and text with unexpected characters")
-        elif kind in ("list", "dict", "tuple", "set"):
-            hints.append(f"`{a['name']}` = empty and multi-element {kind}")
-        elif a.get("default") in ("None", None) and a.get("annotation") and "None" in str(a.get("annotation")):
-            hints.append(f"`{a['name']}` = None and a populated value")
-    if f.complexity >= 5:
-        hints.append(f"one case per branch — complexity {f.complexity} implies ~{f.complexity} independent paths")
-    if not hints:
-        hints.append("a happy-path case plus one boundary/error case")
-    return hints[:4]
-
-
-def module_suggestions(file: str, gaps: list[CoverageGap], cov: float | None, statements: int | None,
-                       missing_total: int, measured: bool = True) -> str:
-    """Build the actionable 'where to improve coverage' recommendation for one module."""
-    if not gaps:
-        return ("Add focused tests for the highest-complexity untested functions in this module first, starting with "
-                "the public API surface.")
-    lines = [f"Where to improve coverage in {file} — work top-down, the list is ordered by uncovered lines × "
-             f"complexity:"]
-    for i, g in enumerate(gaps[:5], 1):
-        f = g.function
-        gain = f" (~+{100 * g.missing_count / statements:.0f} pts for this file)" if measured and statements else ""
-        lines.append(f"{i}. `{f.qualname}` (line {f.line}, complexity {f.complexity}) — {g.missing_count} uncovered "
-                     f"line(s) at {line_ranges(g.missing)}{gain}. Cover: " + "; ".join(_suggest_cases(f)) + ".")
-    if len(gaps) > 5:
-        lines.append(f"…and {len(gaps) - 5} further function(s) with uncovered lines in this module.")
-    covered_by_plan = sum(g.missing_count for g in gaps[:5])
-    if measured and statements and cov is not None:
-        target = min(100.0, cov + 100 * covered_by_plan / statements)
-        lines.append(f"Covering just these takes {file} from {cov:.0f}% to roughly {target:.0f}%.")
-    elif missing_total:
-        lines.append(f"Covering just these closes {covered_by_plan} of {missing_total} uncovered line(s). Coverage "
-                     f"was not measured for this scan, so these are static estimates.")
-    return "\n".join(lines)
 
 
 def _drop_tests(code: str, names: set[str]) -> str | None:
@@ -336,19 +175,36 @@ class UnitTestAgent(BaseAgent):
 
     def run(self, ctx: AgentContext) -> AgentResult:
         ws: RepoWorkspace = ctx.tool("repo.read")
+        sandbox: DockerSandbox | None = ctx.tool("sandbox.execute") if ctx.has_tool("sandbox.execute") else None
+        if not ctx.options.get("execute_tests", True):
+            sandbox = None
+        llm: LLMService | None = ctx.tool("llm.generate") if ctx.has_tool("llm.generate") else None
+        # Python and JS/TS/Go pipelines are independent: overlap sandbox installs with LLM drafting.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="unit-langs") as pool:
+            py_future = pool.submit(self._run_python, ctx, ws)
+            poly_future = pool.submit(run_polyglot_unit_tests, ctx, ws, sandbox, llm,
+                                      int(ctx.options.get("max_generated_tests", 6)))
+            result, poly = py_future.result(), poly_future.result()
+        result.findings += poly.findings
+        result.test_runs += poly.test_runs
+        result.artifacts += poly.artifacts
+        result.tools_used = sorted(set(result.tools_used) | poly.tools | ({"lizard"} if poly.metrics else set()))
+        result.metrics = {**result.metrics, **poly.metrics}
+        if not result.metrics.get("source_files") and not poly.findings and not poly.test_runs:
+            result.notes.append("No testable source files found for Python, JavaScript/TypeScript or Go.")
+        ctx.progress(1.0, "Unit test analysis complete")
+        return result
+
+    def _run_python(self, ctx: AgentContext, ws: RepoWorkspace) -> AgentResult:
         result = AgentResult(agent_id="unit_test", tools_used=["ast", "radon"])
         py_files = [p for p in ws.iter_files({".py"}) if not ws.rel(p).startswith(("docs/", "examples/"))]
         sources = [p for p in py_files if not is_test_path(ws.rel(p)) and p.name not in ("setup.py", "conftest.py")
                    and "migrations" not in ws.rel(p)]
         tests = [p for p in py_files if is_test_path(ws.rel(p))]
-        js_tests = [p for p in ws.iter_files({".js", ".ts", ".jsx", ".tsx"}) if is_test_path(ws.rel(p))]
-        ctx.log(f"Found {len(sources)} Python source files and {len(tests)} Python test files"
-                + (f", {len(js_tests)} JS/TS test files" if js_tests else ""))
+        ctx.log(f"Found {len(sources)} Python source files and {len(tests)} Python test files")
 
         if not sources:
-            result.notes.append("No Python sources found — coverage measurement is implemented for Python projects; "
-                                "JS/TS projects are inventoried only.")
-            result.metrics = {"source_files": 0, "test_files": len(tests) + len(js_tests)}
+            result.metrics = {"source_files": 0, "test_files": len(tests)}
             return result
 
         modules = [analyse_python_module(ws, p) for p in sources]
@@ -419,7 +275,6 @@ class UnitTestAgent(BaseAgent):
         for f in functions:
             by_module[f.file].append(f)
         produced = 0
-        roadmap: list[dict[str, Any]] = []
         for m in modules:
             fns = by_module.get(m.file, [])
             if not fns:
@@ -430,27 +285,6 @@ class UnitTestAgent(BaseAgent):
             if not (measured_low or (cov is None and untested)):
                 continue
             risky = sorted(untested or fns, key=lambda f: -f.complexity)[:8]
-            if baseline and cov is not None:
-                measured_cov = True
-                missing = baseline.missing_lines.get(m.file, [])
-                statements = baseline.statements.get(m.file) or m.sloc or None
-                missing_total = baseline.missing_counts.get(m.file, len(missing))
-                gaps = function_gaps(fns, missing)
-            else:
-                # No measured coverage: treat every untested public function as entirely uncovered.
-                measured_cov = False
-                statements = m.sloc or None
-                gaps = sorted((CoverageGap(function=f, missing=list(range(f.line, f.end_line + 1)),
-                                           statements=f.end_line - f.line + 1) for f in untested),
-                              key=lambda g: -g.score)
-                missing_total = sum(g.missing_count for g in gaps)
-            suggestions = module_suggestions(m.file, gaps, cov, statements, missing_total, measured_cov)
-            if gaps:
-                roadmap.append({"file": m.file, "coverage_percent": cov, "uncovered_lines": missing_total,
-                                "score": round(sum(g.score for g in gaps), 1),
-                                "start_with": [{"function": g.function.qualname, "line": g.function.line,
-                                                "uncovered_lines": g.missing_count,
-                                                "complexity": g.function.complexity} for g in gaps[:3]]})
             sev = "high" if any(f.complexity >= 10 for f in risky) and (cov or 0) < 30 else (
                 "medium" if (cov or 0) < 40 else "low")
             gen_for_module = {rel: c for rel, c in generated.items() if gen_meta.get(rel, {}).get("module") == m.file}
@@ -473,27 +307,15 @@ class UnitTestAgent(BaseAgent):
                 target=m.file, location={"line": risky[0].line if risky else 1},
                 evidence={"coverage_percent": cov, "measured": cov is not None,
                           "missing_lines": (baseline.missing_lines.get(m.file, [])[:60] if baseline else []),
-                          "missing_line_ranges": line_ranges([n for g in gaps for n in g.missing], max_ranges=12),
-                          "uncovered_lines": missing_total, "statements": statements,
-                          "coverage_targets": [{"function": g.function.qualname, "line": g.function.line,
-                                                "end_line": g.function.end_line, "complexity": g.function.complexity,
-                                                "uncovered_lines": g.missing_count,
-                                                "missing_line_ranges": line_ranges(g.missing),
-                                                "estimated_file_coverage_gain_pts": (
-                                                    round(100 * g.missing_count / statements, 1)
-                                                    if measured_cov and statements else None)} for g in gaps[:8]],
                           "untested_functions": [{"name": f.qualname, "line": f.line, "complexity": f.complexity}
                                                  for f in risky]},
-                recommendation=suggestions,
+                recommendation="Add focused tests for the highest-complexity untested functions first.",
                 confidence="high" if cov is not None else "medium",
                 data_source="measured" if cov is not None else "estimated",
                 fingerprint_key=f"coverage|{m.file}", proposal=proposal))
             produced += 1
             if produced >= 40:
                 break
-
-        if roadmap:
-            result.findings.append(self._roadmap_finding(roadmap, baseline, after))
 
         for rel, content in generated.items():
             result.artifacts.append(ArtifactDraft(kind="test_file", name=_safe_ident(rel.replace("/", "_"))[:150]
@@ -506,52 +328,9 @@ class UnitTestAgent(BaseAgent):
             "coverage_after": after.coverage_percent if after else None,
             "tests_generated": sum(m["tests"] for m in gen_meta.values()),
             "sandbox_executed": execute,
-            "modules_needing_coverage": len(roadmap),
         }
-        ctx.progress(1.0, "Unit test analysis complete")
+        ctx.progress(0.6, "Python unit test analysis complete")
         return result
-
-    @staticmethod
-    def _roadmap_finding(roadmap: list[dict[str, Any]], baseline: SandboxResult | None,
-                         after: SandboxResult | None) -> FindingDraft:
-        """A single prioritised 'where to improve coverage next' plan across the whole repository."""
-        top = sorted(roadmap, key=lambda r: -r["score"])[:10]
-        measured = baseline is not None and baseline.coverage_percent is not None
-        current = (after.coverage_percent if after and after.coverage_percent is not None
-                   else baseline.coverage_percent if baseline else None)
-        total_statements = sum(baseline.statements.values()) if baseline else 0
-        planned = sum(r["uncovered_lines"] for r in top)
-        lines = ["Improve coverage in this order — modules are ranked by uncovered lines weighted by complexity:"]
-        for i, r in enumerate(top, 1):
-            where = ", ".join(f"{t['function']} (line {t['line']}, {t['uncovered_lines']} uncovered)"
-                              for t in r["start_with"])
-            cov_txt = f"at {r['coverage_percent']:.0f}% coverage, " if r["coverage_percent"] is not None else ""
-            lines.append(f"{i}. {r['file']} — {cov_txt}{r['uncovered_lines']} uncovered line(s). Start with: {where}.")
-        if measured and total_statements:
-            lines.append(f"Closing these gaps would move overall coverage from {current:.0f}% to roughly "
-                         f"{min(100.0, (current or 0) + 100 * planned / total_statements):.0f}%.")
-        else:
-            lines.append("Coverage was not measured in a sandbox for this scan, so the ranking is based on static "
-                         "analysis (untested public functions weighted by complexity). Enable sandbox execution for "
-                         "measured line-level gaps.")
-        lines.append("General guidance: test pure functions with boundary inputs first (cheapest coverage), then "
-                     "branch-heavy functions one path per test, then wire I/O-dependent code behind fakes so it "
-                     "becomes testable.")
-        return FindingDraft(
-            rule_id="coverage:roadmap", category="coverage", severity="info",
-            title=f"Coverage improvement plan: {len(top)} module(s) to target next",
-            description=(f"Overall line coverage is {current:.0f}%. " if current is not None else
-                         "Overall line coverage was not measured. ")
-                        + f"{len(roadmap)} module(s) have uncovered logic; the {len(top)} highest-impact are listed "
-                          "with the exact functions and line ranges to test.",
-            target="repository", location={},
-            evidence={"coverage_percent": current, "measured": measured,
-                      "total_uncovered_statements": (sum(baseline.missing_counts.values()) if baseline else None),
-                      "modules": top},
-            recommendation="\n".join(lines),
-            confidence="high" if measured else "medium",
-            data_source="measured" if measured else "estimated",
-            fingerprint_key="coverage|roadmap")
 
     @staticmethod
     def _run_draft(r: SandboxResult, label: str, before: float | None) -> TestRunDraft:
@@ -578,29 +357,24 @@ class UnitTestAgent(BaseAgent):
                     uncovered: set[str], exclude: set[str] | None = None) -> list[FunctionInfo]:
         ws: RepoWorkspace = ctx.workspace
         out = []
-        globals_cache: dict[str, set[str]] = {}
         for f in functions:
             if exclude and f"{f.file}:{f.qualname}" in exclude:
                 continue
             if f.is_method or f.is_async or f.name.startswith("_") or SIDE_EFFECT_NAME.match(f.name):
                 continue
-            if f.decorators and any(not TRANSPARENT_DECORATOR.match(d) for d in f.decorators):
+            if f.decorators and any(not d.startswith(("staticmethod", "functools.lru_cache", "lru_cache", "cache"))
+                                    for d in f.decorators):
                 continue
             if uncovered and f"{f.file}:{f.qualname}" not in uncovered:
                 continue
             if not uncovered and f.name in referenced:
                 continue
-            source = ws.read_text(f.file)
-            src = "\n".join(source.splitlines()[f.line - 1:f.end_line])
-            if SIDE_EFFECT_SRC.search(src) or REQUEST_CONTEXT_SRC.search(src):
-                continue
-            if f.file not in globals_cache:
-                globals_cache[f.file] = module_mutable_globals(source)
-            if any(re.search(rf"\b{re.escape(g)}\b", src) for g in globals_cache[f.file]):
+            src = "\n".join(ws.read_text(f.file).splitlines()[f.line - 1:f.end_line])
+            if SIDE_EFFECT_SRC.search(src):
                 continue
             out.append(f)
         out.sort(key=lambda f: -f.complexity)
-        return out[: int(ctx.options.get("max_generated_tests", 8)) * 2]
+        return out[: int(ctx.options.get("max_generated_tests", 6)) * 2]
 
     def _characterize(self, ctx: AgentContext, functions: list[FunctionInfo], referenced: set[str],
                       uncovered: set[str], session: Any,
@@ -622,7 +396,7 @@ class UnitTestAgent(BaseAgent):
         per_module: dict[str, list[str]] = defaultdict(list)
         imports: dict[str, set[str]] = defaultdict(set)
         counts: dict[str, int] = defaultdict(int)
-        limit = int(ctx.options.get("max_generated_tests", 8))
+        limit = int(ctx.options.get("max_generated_tests", 6))
         fn_done = 0
         for job in jobs:
             rec = records.get(job["id"])
@@ -630,13 +404,9 @@ class UnitTestAgent(BaseAgent):
             if not rec or rec.get("error"):
                 continue
             body: list[str] = []
-            route = is_route_handler(f)
             for n, case in enumerate(rec["cases"], 1):
                 kind, value, ok, tname = case["first"]
                 if not case["stable"] or kind == "timeout" or not ok:
-                    continue
-                if kind == "raises" and route:
-                    # Outside a live request/app context an exception says nothing about the handler's behaviour.
                     continue
                 call = f"{f.name}({', '.join(case['args'])})"
                 if kind == "value":
@@ -652,7 +422,7 @@ class UnitTestAgent(BaseAgent):
             if not body:
                 continue
             mod = module_name_for(f.file)
-            rel = generated_test_path(mod)
+            rel = f"tests/skyforge_generated/test_{_safe_ident(mod)}.py"
             per_module[rel] += body
             imports[rel].add(f"from {mod} import {f.name}")
             counts[rel] += len(body)
@@ -673,18 +443,13 @@ class UnitTestAgent(BaseAgent):
             meta[rel] = {"module": per_module[rel + "::module"][0], "tests": counts[rel],
                          "strategy": "Characterization (sandbox-observed behaviour)"}
         if files:
-            for rel, content in files.items():
-                session.write_file(rel, content)
             check = session.pytest(list(files), coverage=False)
             if check.status != "passed":
                 failing_files = {fl["test"].split("::")[0].replace(".", "/") for fl in check.failures}
-                # Fail closed: when the failures cannot be attributed to specific files (collection errors, nothing
-                # collected, a crashed run) every generated file is dropped — a test is only proposed if it passed.
-                drop_all = check.status in ("error", "not_executed") or not failing_files
-                ctx.log(f"Discarding generated tests that did not pass ({check.status}): "
-                        f"{'all' if drop_all else sorted(failing_files)[:5]}", level="warning")
+                ctx.log(f"Discarding generated tests that did not pass: {sorted(failing_files)[:5]}", level="warning")
                 for rel in list(files):
-                    if drop_all or any(rel.replace(".py", "").endswith(ff.split("/")[-1]) for ff in failing_files):
+                    if any(rel.replace(".py", "").endswith(ff.split("/")[-1]) for ff in failing_files) or \
+                            check.status == "error":
                         files.pop(rel)
                         meta.pop(rel)
                         session.remove_file(rel)
@@ -698,18 +463,31 @@ class UnitTestAgent(BaseAgent):
             return {}, {}
         files: dict[str, str] = {}
         meta: dict[str, dict] = {}
-        for f in self._candidates(ctx, functions, referenced, uncovered)[: int(ctx.options.get("max_generated_tests", 8))]:
-            ctx.check_cancelled()
+        cands = self._candidates(ctx, functions, referenced, uncovered)[: int(ctx.options.get("max_generated_tests", 6))]
+
+        def draft(f: FunctionInfo) -> str | None:
             src = "\n".join(ws.read_text(f.file).splitlines()[f.line - 1:f.end_line])
             mod = module_name_for(f.file)
-            prompt = (f"Write pytest unit tests for the function `{f.name}` from module `{mod}`. "
-                      f"Import it with `from {mod} import {f.name}`. Use only pytest and the standard library. "
-                      "Assert concrete expected values derived from the code logic; cover edge cases and error "
-                      "paths. No network, file system, subprocess or environment access. Output only Python code.\n\n"
+            prompt = (f"Write a focused pytest module for the function `{f.name}` from module `{mod}`. "
+                      f"Import it with `from {mod} import {f.name}`. Use only pytest and the standard library.\n"
+                      "Requirements:\n"
+                      "- Trace the code by hand and assert the exact values the CURRENT implementation returns.\n"
+                      "- Cover: a typical case, boundary values (0, empty, one element, max/min), each branch, and "
+                      "error paths with pytest.raises(<exact exception>).\n"
+                      "- Prefer @pytest.mark.parametrize for equivalence classes; use pytest.approx for floats.\n"
+                      "- If behaviour looks like a bug, still assert current behaviour and add a `# BUG?` comment.\n"
+                      "- Descriptive test names (test_<function>_<scenario>). No network, file system, subprocess, "
+                      "randomness, time or environment access. Output only Python code.\n\n"
                       + wrap_untrusted(src, 4000))
-            code = llm.generate(prompt, max_tokens=900)
+            return llm.generate(prompt, max_tokens=1100)
+
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="llm-tests") as pool:
+            drafts = list(pool.map(draft, cands))
+        for f, code in zip(cands, drafts, strict=True):
+            ctx.check_cancelled()
             if not code:
                 continue
+            mod = module_name_for(f.file)
             code = re.sub(r"^```(?:python)?\s*|```\s*$", "", code.strip(), flags=re.M)
             try:
                 ast.parse(code)
@@ -717,7 +495,7 @@ class UnitTestAgent(BaseAgent):
                 continue
             if scan_generated_code(code) or "def test_" not in code:
                 continue
-            rel = generated_test_path(mod, f.name)
+            rel = f"tests/skyforge_generated/test_{_safe_ident(mod)}_{_safe_ident(f.name)}.py"
             if session is not None:
                 session.write_file(rel, code)
                 check = session.pytest([rel], coverage=False)

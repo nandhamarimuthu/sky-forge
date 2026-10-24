@@ -31,7 +31,7 @@ def build_container(settings: Settings | None = None) -> Container:
     s = settings or get_settings()
     llm = LLMService(s)
     sandbox = DockerSandbox(s.sandbox_python_image, s.sandbox_memory, s.sandbox_cpus, s.sandbox_timeout_s,
-                            enabled=s.sandbox_enabled)
+                            enabled=s.sandbox_enabled, cache_dir=s.data_dir / "cache" / "sandbox-deps")
     osv = OSVClient(s.osv_api_url, s.osv_timeout_s)
     orch = ScanOrchestrator(s, llm, sandbox, osv)
     worker = ScanWorker(orch.run, max_workers=s.max_concurrent_scans)

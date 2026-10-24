@@ -43,7 +43,6 @@ export function SettingsPage() {
   const update = useUpdateSettings();
   const toast = useToast();
   const [model, setModel] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [outcome, setOutcome] = useState("");
   const [page, setPage] = useState(1);
   const canAudit = !!s?.principal.permissions.includes("audit:read");
@@ -60,7 +59,6 @@ export function SettingsPage() {
       onError: (e) => toast(e instanceof ApiError ? e.message : "Update failed", "var(--tomato)"),
     });
   const policy = s.scan_policy;
-  const isOpenAI = s.llm.provider === "openai";
 
   return (
     <>
@@ -70,25 +68,17 @@ export function SettingsPage() {
       <section className="grid-2">
         <div className="card">
           <div className="card-head">
-            <div><h2>Model provider</h2><p className="muted">{isOpenAI
-              ? "OpenAI (gpt-4o-mini) is advisory only — explanations and test drafts leave this machine. Policy enforcement is deterministic."
-              : "Ollama runs locally and is advisory only — explanations and test drafts. Policy enforcement is deterministic."}</p></div>
-            <span className={`tag ${s.llm.model_available ? "tag-measured" : "tag-sim"}`}>{s.llm.model_available ? "ready" : s.llm.reachable ? "model missing" : isOpenAI && !s.llm.api_key_configured ? "no API key" : "offline"}</span>
+            <div><h2>Local model</h2><p className="muted">Ollama is advisory only — explanations and test drafts. Policy enforcement is deterministic.</p></div>
+            <span className={`tag ${s.llm.model_available ? "tag-measured" : "tag-sim"}`}>{s.llm.model_available ? "ready" : s.llm.reachable ? "model missing" : "offline"}</span>
           </div>
           <dl className="kv">
             <dt>Endpoint</dt><dd className="mono">{s.llm.base_url}</dd>
-            <dt>Available models</dt><dd className="mono" style={{ maxHeight: 60, overflow: "auto" }}>{s.llm.installed_models?.join(", ") || "—"}</dd>
-            {isOpenAI && <><dt>API key</dt><dd className="mono">{s.llm.api_key_configured
-              ? `${s.llm.api_key_hint} · from ${s.llm.api_key_source === "settings" ? "settings" : s.llm.api_key_env}`
-              : `not set — add it below or export ${s.llm.api_key_env}`}</dd></>}
-            <dt>CrewAI</dt><dd>{s.llm.crewai_installed ? "installed — crew orchestration enabled" : `not installed — direct ${s.llm.provider} fallback`}</dd>
+            <dt>Installed models</dt><dd className="mono">{s.llm.installed_models?.join(", ") || "—"}</dd>
+            <dt>CrewAI</dt><dd>{s.llm.crewai_installed ? "installed — crew orchestration enabled" : "not installed — direct Ollama fallback"}</dd>
           </dl>
           <div className="form-row" style={{ marginTop: 14 }}>
-            <label className="field"><span>Provider</span>
-              <select className="select input" disabled={!canWrite} value={s.llm.provider}
-                onChange={(e) => save({ llm_provider: e.target.value }, `Provider switched to ${e.target.value}`)}>
-                <option value="ollama">Ollama (local)</option><option value="openai">OpenAI (gpt-4o-mini)</option>
-              </select>
+            <label className="field"><span>Model</span>
+              <input className="input mono" value={model} disabled={!canWrite} onChange={(e) => setModel(e.target.value)} />
             </label>
             <label className="field"><span>LLM assistance</span>
               <select className="select input" disabled={!canWrite} value={String(s.llm.enabled)} onChange={(e) => save({ llm_enabled: e.target.value === "true" }, "LLM setting saved")}>
@@ -96,31 +86,7 @@ export function SettingsPage() {
               </select>
             </label>
           </div>
-          <div className="form-row" style={{ marginTop: 14 }}>
-            <label className="field"><span>{isOpenAI ? "OpenAI model" : "Ollama model"}</span>
-              <input className="input mono" value={model} disabled={!canWrite} onChange={(e) => setModel(e.target.value)} />
-            </label>
-          </div>
-          {isOpenAI && (
-            <div className="form-row" style={{ marginTop: 14 }}>
-              <label className="field"><span>OpenAI API key</span>
-                <input className="input mono" type="password" autoComplete="off" spellCheck={false}
-                  placeholder={s.llm.api_key_configured ? "•••••••• (stored)" : "sk-…"}
-                  value={apiKey} disabled={!canWrite} onChange={(e) => setApiKey(e.target.value)}
-                  aria-label="OpenAI API key" />
-              </label>
-              {canWrite && (
-                <div className="row" style={{ alignItems: "flex-end", gap: 8 }}>
-                  <button className="btn btn-sm" disabled={apiKey.trim().length < 20 || update.isPending}
-                    onClick={() => { save({ openai_api_key: apiKey.trim() }, "API key saved"); setApiKey(""); }}>Save key</button>
-                  <button className="btn btn-sm btn-ghost"
-                    disabled={!s.llm.api_key_configured || s.llm.api_key_source !== "settings" || update.isPending}
-                    onClick={() => { setApiKey(""); save({ openai_api_key: "" }, "API key cleared"); }}>Clear</button>
-                </div>
-              )}
-            </div>
-          )}
-          {canWrite && <div className="modal-actions"><button className="btn btn-primary btn-sm" disabled={!/^[A-Za-z0-9._:\-/]+$/.test(model) || update.isPending} onClick={() => save(isOpenAI ? { openai_model: model } : { ollama_model: model }, "Model updated")}>Save model</button></div>}
+          {canWrite && <div className="modal-actions"><button className="btn btn-primary btn-sm" disabled={!/^[A-Za-z0-9._:\-/]+$/.test(model) || update.isPending} onClick={() => save({ ollama_model: model }, "Model updated")}>Save model</button></div>}
         </div>
 
         <div className="card">

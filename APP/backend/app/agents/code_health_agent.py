@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import statistics
 from collections import Counter, defaultdict
-from typing import cast
+from typing import Any, cast
 
 from app.adapters.repository.git_repo import RepositoryError, RepoWorkspace, run_git
 from app.adapters.scanners.code_metrics import (
     RUFF_SAFE_FIX_RULES,
+    analyse_polyglot,
     analyse_python_module,
     find_duplicates,
     is_test_path,
@@ -46,7 +47,11 @@ class CodeHealthAgent(BaseAgent):
         result = AgentResult(agent_id="code_health", tools_used=["radon", "ruff", "duplication-detector", "git-churn"])
         py = [p for p in ws.iter_files({".py"}) if not is_test_path(ws.rel(p))]
         modules = [analyse_python_module(ws, p) for p in py]
-        ctx.progress(0.3, f"Analysed {len(modules)} Python modules")
+        poly, poly_sloc = analyse_polyglot(ws)
+        if poly_sloc:
+            result.tools_used.append("lizard")
+        ctx.progress(0.3, f"Analysed {len(modules)} Python modules and {len(poly)} functions in "
+                          f"{', '.join(sorted(poly_sloc)) or 'no other languages'}")
         ctx.check_cancelled()
 
         lint = run_ruff(ws.root) if ctx.has_tool("static.ruff") and py else []
@@ -57,7 +62,7 @@ class CodeHealthAgent(BaseAgent):
         ctx.progress(0.7, f"{len(dups)} duplicated blocks")
         hot = churn(ws)
 
-        functions = [f for m in modules for f in m.functions]
+        functions: list[Any] = [f for m in modules for f in m.functions] + poly
         for f in sorted(functions, key=lambda f: -f.complexity):
             if f.complexity < 15:
                 break
@@ -148,16 +153,22 @@ class CodeHealthAgent(BaseAgent):
 
         cc_values = [f.complexity for f in functions] or [0]
         mi_values = [m.maintainability for m in modules if m.maintainability is not None]
-        total_sloc = sum(m.sloc for m in modules) or 1
+        total_sloc = (sum(m.sloc for m in modules) + sum(poly_sloc.values())) or 1
         dup_lines = sum(d.lines * (len(d.occurrences) - 1) for d in dups)
-        hotspots = sorted(({"file": m.file, "churn": hot.get(m.file, 0),
+        poly_by_file: dict[str, int] = defaultdict(int)
+        for pf in poly:
+            poly_by_file[pf.file] = max(poly_by_file[pf.file], pf.complexity)
+        hotspots = sorted([{"file": m.file, "churn": hot.get(m.file, 0),
                             "max_complexity": max((f.complexity for f in m.functions), default=0),
                             "score": hot.get(m.file, 0) * max((f.complexity for f in m.functions), default=0)}
-                           for m in modules), key=lambda h: -cast(int, h["score"]))[:10]
+                           for m in modules] +
+                          [{"file": f, "churn": hot.get(f, 0), "max_complexity": c, "score": hot.get(f, 0) * c}
+                           for f, c in poly_by_file.items()], key=lambda h: -cast(int, h["score"]))[:10]
         health = max(0.0, min(100.0, 100 - (statistics.fmean(cc_values) - 1) * 6 - len(lint) / total_sloc * 400
                               - dup_lines / total_sloc * 100))
         result.metrics = {
             "python_modules": len(modules), "functions": len(functions), "sloc": total_sloc,
+            "sloc_by_language": {**({"py": sum(m.sloc for m in modules)} if modules else {}), **poly_sloc},
             "avg_complexity": round(statistics.fmean(cc_values), 2), "max_complexity": max(cc_values),
             "avg_maintainability": round(statistics.fmean(mi_values), 1) if mi_values else None,
             "lint_issues": len(lint), "lint_by_rule": dict(Counter(v["code"] for v in lint).most_common(15)),

@@ -11,16 +11,19 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import Any, cast
+from urllib.parse import quote
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app.adapters.repository.git_repo import RepositoryError, RepoWorkspace, run_git
 from app.adapters.scanners.code_metrics import RUFF_SAFE_FIX_RULES, ruff_binary
-from app.adapters.scanners.manifests import discover_dependencies
+from app.adapters.scanners.manifests import discover_dependencies, unified_diff
 from app.adapters.scanners.terraform import parse_terraform
 from app.agents.security_guardrails import CODE_RULES, PolicyEngine, scan_secrets, secret_fix, syntax_check
 from app.core.errors import ApiError
@@ -28,7 +31,6 @@ from app.core.security import Principal, redact
 from app.db.session import session_scope
 from app.models import Approval, Finding, RemediationProposal, Scan, ScanArtifact, TestRun, utcnow
 from app.orchestration.orchestrator import workspace_dir
-from app.services import publish
 from app.services.audit import audit
 from app.services.container import Container
 
@@ -92,52 +94,26 @@ def approve(db: Session, c: Container, finding: Finding, prop: RemediationPropos
 
 
 def start_apply(db: Session, c: Container, finding: Finding, prop: RemediationProposal, actor: Principal,
-                ip: str | None, open_pr: bool = False) -> RemediationProposal:
-    if prop.status != "approved":
+                ip: str | None) -> RemediationProposal:
+    if prop.status not in ("approved", "apply_failed", "verification_failed"):
         audit(db, actor.name, "remediation.apply", "proposal", prop.id, "denied", {"reason": f"status={prop.status}"},
               ip)
-        raise ApiError(409, "approval_required", "A human approval is required before a change can be applied")
+        raise ApiError(409, "approval_required", "Approve the fix before applying or retrying it")
     if not any(a.proposal_id == prop.id and a.decision == "approve" for a in
                db.query(Approval).filter(Approval.finding_id == finding.id).all()):
         raise ApiError(409, "approval_required", "No approval record found for this proposal")
     prop.status = "applying"
     finding.status = "in_progress"
-    audit(db, actor.name, "remediation.apply", "proposal", prop.id, "allowed",
-          {"finding": finding.id, "auto_pull_request": open_pr}, ip)
+    audit(db, actor.name, "remediation.apply", "proposal", prop.id, "allowed", {"finding": finding.id}, ip)
     db.commit()
-    prop_id = prop.id
-    c.worker.submit_task(lambda: _apply_and_verify(c, prop_id, actor, ip, open_pr))
+    c.worker.submit_task(lambda: _apply_and_verify(c, prop.id, actor.name))
     return prop
 
 
-def one_click_fix(db: Session, c: Container, finding: Finding, prop: RemediationProposal, actor: Principal,
-                  comment: str, ip: str | None) -> RemediationProposal:
-    """Approve → apply on an isolated branch → verify → open a draft PR, from a single explicit human action.
-
-    Every step still runs its normal guardrail: the click is recorded as the approval, policy is re-validated, the
-    change is only ever committed to a `skyforge/` branch, and the PR is opened only if verification succeeds.
-    """
-    if not actor.can("remediation:approve"):
-        raise ApiError(403, "forbidden", "Your role cannot approve remediations")
-    if prop.status in ("validated", "declined", "rejected_by_policy"):
-        approve(db, c, finding, prop, actor, comment or "Approved via one-click fix", ip)
-    if prop.status == "approved":
-        return start_apply(db, c, finding, prop, actor, ip, open_pr=True)
-    if prop.status in publish.PUBLISHABLE:
-        publish.open_pull_request(db, c, finding, prop, actor, ip)
-        db.refresh(prop)
-        return prop
-    raise ApiError(409, "invalid_state", f"Proposal is '{prop.status}' and cannot be fixed in one click")
-
-
-def _apply_and_verify(c: Container, prop_id: str, actor: Principal | str, ip: str | None = None,
-                      open_pr: bool = False) -> None:
-    name = actor.name if isinstance(actor, Principal) else actor
+def _apply_and_verify(c: Container, prop_id: str, actor: str) -> None:
     try:
-        _apply(c, prop_id, name)
-        _verify(c, prop_id, name)
-        if open_pr and isinstance(actor, Principal):
-            _publish(c, prop_id, actor, ip)
+        _apply(c, prop_id, actor)
+        _verify(c, prop_id, actor)
     except Exception as exc:  # noqa: BLE001 - record any failure on the proposal; never leave it 'applying'
         log.exception("Remediation %s failed", prop_id)
         with session_scope() as db:
@@ -147,26 +123,8 @@ def _apply_and_verify(c: Container, prop_id: str, actor: Principal | str, ip: st
                 prop.verification = {**(prop.verification or {}), "error": f"{type(exc).__name__}: {exc}"[:500]}
                 if prop.finding and prop.finding.status == "in_progress":
                     prop.finding.status = "accepted"
-                audit(db, name, "remediation.error", "proposal", prop_id, "error", {"error": str(exc)[:300]},
+                audit(db, actor, "remediation.error", "proposal", prop_id, "error", {"error": str(exc)[:300]},
                       commit=False)
-
-
-def _publish(c: Container, prop_id: str, actor: Principal, ip: str | None) -> None:
-    """Open the draft PR after a successful verification. A publish failure never fails the fix itself."""
-    with session_scope() as db:
-        prop = db.get(RemediationProposal, prop_id)
-        if prop is None or prop.finding is None:
-            return
-        if prop.status not in publish.PUBLISHABLE:
-            prop.verification = {**(prop.verification or {}),
-                                 "pull_request_error": f"Not published: proposal is '{prop.status}'"}
-            return
-        try:
-            publish.open_pull_request(db, c, prop.finding, prop, actor, ip)
-        except ApiError as exc:
-            log.warning("Auto pull request for %s failed: %s", prop_id, exc.code)
-            prop.verification = {**(prop.verification or {}),
-                                 "pull_request_error": f"{exc.code}: {exc.message}"[:500]}
 
 
 def _apply(c: Container, prop_id: str, actor: str) -> None:
@@ -197,6 +155,17 @@ def _apply(c: Container, prop_id: str, actor: str) -> None:
         patch = wt.parent / f"{prop.id}.patch"
         patch.write_text(change.diff if change.diff.endswith("\n") else change.diff + "\n", encoding="utf-8")
         run_git(["apply", "--whitespace=nowarn", str(patch)], cwd=wt)
+        if prop.kind == "dependency_upgrade":
+            lock_update = _sync_npm_lock(wt, change.files, prop.finding)
+            if lock_update:
+                lock_path, lock_diff = lock_update
+                change.diff += lock_diff
+                change.files.append(lock_path)
+                prop.diff, prop.files = change.diff, change.files
+                validation["checks"].append({"name": "npm_lockfile_synced", "passed": True,
+                                             "detail": f"{lock_path} regenerated in sandbox with scripts disabled"})
+                validation["passed"] = all(ch["passed"] for ch in validation["checks"])
+                prop.validation = validation
         run_git(["add", "-A"], cwd=wt)
         finding = prop.finding
         msg = (f"SkyForge: {prop.title}\n\nFinding: {finding.id} ({finding.severity})\nAgent: {prop.agent_id}\n"
@@ -220,6 +189,66 @@ def _apply(c: Container, prop_id: str, actor: str) -> None:
         finding.status = "fixed"
         audit(db, actor, "remediation.applied", "proposal", prop_id, "allowed",
               {"branch": branch, "commit": prop.commit_sha}, commit=False)
+
+
+def _sync_npm_lock(wt: Any, changed_files: list[str], finding: Finding) -> tuple[str, str] | None:
+    package_files = [f for f in changed_files if f.endswith("/package.json") or f == "package.json"]
+    if not package_files:
+        return None
+    package_file = package_files[0]
+    folder = package_file.rpartition("/")[0]
+    lock_rel = f"{folder}/package-lock.json" if folder else "package-lock.json"
+    if not (wt / lock_rel).is_file():
+        shrinkwrap = f"{folder}/npm-shrinkwrap.json" if folder else "npm-shrinkwrap.json"
+        lock_rel = shrinkwrap if (wt / shrinkwrap).is_file() else ""
+    if not lock_rel:
+        return None
+    package_data = json.loads((wt / package_file).read_text(encoding="utf-8"))
+    package_name = str((finding.evidence or {}).get("package", ""))
+    declared = next((section[package_name] for section in (package_data.get("dependencies", {}),
+                                                            package_data.get("devDependencies", {}))
+                     if package_name in section), None)
+    match = re.search(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", str(declared or ""))
+    if not match:
+        raise RuntimeError(f"Could not determine the patched {package_name} version from {package_file}")
+    target_version = match.group(0)
+    lock_path = wt / lock_rel
+    before = lock_path.read_text(encoding="utf-8")
+    lock_data = json.loads(before)
+    try:
+        url_name = quote(package_name, safe="@")
+        response = httpx.get(f"https://registry.npmjs.org/{url_name}/{quote(target_version, safe='.+-')}", timeout=30)
+        response.raise_for_status()
+        metadata = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise RuntimeError(f"Could not fetch npm metadata for {package_name}@{target_version}: {type(exc).__name__}") \
+            from exc
+    dist = metadata.get("dist") or {}
+    if not dist.get("tarball") or not dist.get("integrity"):
+        raise RuntimeError(f"npm did not return integrity metadata for {package_name}@{target_version}")
+
+    # Updating just this package is safe only when its dependency graph is unchanged.
+    new_requires = metadata.get("dependencies") or {}
+    if metadata.get("optionalDependencies") or metadata.get("peerDependencies"):
+        raise RuntimeError(f"{package_name}@{target_version} changes optional/peer dependencies; "
+                           "regenerate its npm lock manually")
+    package_entry = (lock_data.get("packages") or {}).get(f"node_modules/{package_name}")
+    dependency_entry = (lock_data.get("dependencies") or {}).get(package_name)
+    entry = package_entry or dependency_entry
+    if entry is None:
+        raise RuntimeError(f"{package_name} is not a top-level entry in {lock_rel}; regenerate its npm lock manually")
+    old_requires = entry.get("requires") or {}
+    if old_requires != new_requires:
+        raise RuntimeError(f"{package_name}@{target_version} changes its dependency tree; regenerate {lock_rel} manually")
+    installed = str((finding.evidence or {}).get("installed_version", ""))
+    if installed and entry.get("version") != installed:
+        raise RuntimeError(f"Lockfile has {package_name}@{entry.get('version')}, expected scanned {installed}; re-scan")
+    entry.update(version=target_version, resolved=dist["tarball"], integrity=dist["integrity"])
+    after = json.dumps(lock_data, indent=2, ensure_ascii=False) + "\n"
+    if before == after:
+        return None
+    lock_path.write_text(after, encoding="utf-8")
+    return lock_rel, unified_diff(lock_rel, before, after)
 
 
 def _verify(c: Container, prop_id: str, actor: str) -> None:
@@ -273,11 +302,13 @@ def _verify_dependency(c: Container, ws: RepoWorkspace, finding: Finding, checks
     old_ids = {a["id"] for a in ev.get("advisories", [])} | {al for a in ev.get("advisories", []) for al in
                                                               a.get("aliases", [])}
     remaining = [a.id for a in advisories if a.id in old_ids or set(a.aliases) & old_ids]
+    new_advisories = [a.id for a in advisories if a.id not in old_ids and not set(a.aliases) & old_ids]
     checks.append({"name": "osv_rescan", "passed": not remaining,
                    "detail": f"{len(advisories)} advisories for {dep.version}; original remaining: {remaining[:5]}"})
-    checks.append({"name": "no_new_advisories", "passed": not advisories,
-                   "detail": "clean" if not advisories else f"{len(advisories)} other advisories still apply"})
-    return not remaining
+    checks.append({"name": "no_new_advisories", "passed": not new_advisories,
+                   "detail": "none introduced" if not new_advisories else
+                   f"{len(new_advisories)} new advisories: {new_advisories[:5]}"})
+    return not remaining and not new_advisories
 
 
 def _verify_tests(c: Container, db: Session, ws: RepoWorkspace, prop: RemediationProposal, checks: list[dict]) -> bool | None:
@@ -296,8 +327,7 @@ def _verify_tests(c: Container, db: Session, ws: RepoWorkspace, prop: Remediatio
                    details={"label": f"Verification of {prop.id}", "failures": res.failures[:10],
                             "reason": res.reason}))
     checks.append({"name": "tests_pass_in_sandbox", "passed": res.status == "passed",
-                   "detail": f"{res.passed}/{res.total} passed; coverage {res.coverage_percent}%",
-                   "coverage_after": res.coverage_percent})
+                   "detail": f"{res.passed}/{res.total} passed; coverage {res.coverage_percent}%"})
     return res.status == "passed"
 
 

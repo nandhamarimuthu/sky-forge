@@ -80,9 +80,7 @@ def create_project(body: ProjectCreate, request: Request, db: Session = Depends(
     dump_ref = None
     if mode == "dump":
         dumps = available_fixture_dumps(c.settings)
-        name = (aws.dump if aws and aws.dump else
-                ref.name if ref.provider == "local-fixture" and ref.name in dumps else
-                "shared-platform" if "shared-platform" in dumps else (dumps[0] if dumps else None))
+        name = aws.dump if aws and aws.dump else None
         if name and name not in dumps:
             raise ApiError(422, "unknown_dump", f"AWS data dump '{name}' does not exist", {"available": dumps})
         if name:
@@ -91,6 +89,8 @@ def create_project(body: ProjectCreate, request: Request, db: Session = Depends(
             account_id = manifest.get("account_id", account_id)
             regions = [manifest.get("region", regions[0])]
             tag = aws.project_tag if aws and aws.project_tag else manifest.get("project_tag", "")
+        else:
+            dump_ref = "terraform"
     project.cloud_account = CloudAccountReference(
         account_id=account_id, project_tag=tag, regions=regions, services=c.settings.service_allowlist,
         mode=mode, profile_ref=aws.profile_ref if aws else None, dump_ref=dump_ref)
@@ -288,12 +288,17 @@ def set_aws_source(project_id: str, body: AwsSourceUpdate, request: Request, db:
                    principal: Principal = Depends(require("project:create")),
                    c: Container = Depends(container)) -> dict:
     p = load_project(db, principal, project_id, request)
-    if body.dump not in available_fixture_dumps(c.settings):
-        raise ApiError(422, "unknown_dump", f"AWS data dump '{body.dump}' does not exist")
     acct = p.cloud_account or CloudAccountReference(project_id=p.id, account_id="000000000000", regions=[],
                                                     services=c.settings.service_allowlist)
-    acct.dump_ref = f"fixture:{body.dump}"
-    _apply_manifest(acct, fixture_dumps_dir(c.settings) / body.dump, body.project_tag)
+    if body.dump == "terraform":
+        acct.mode, acct.dump_ref = "dump", "terraform"
+        if body.project_tag is not None:
+            acct.project_tag = body.project_tag
+    else:
+        if body.dump not in available_fixture_dumps(c.settings):
+            raise ApiError(422, "unknown_dump", f"AWS data dump '{body.dump}' does not exist")
+        acct.dump_ref = f"fixture:{body.dump}"
+        _apply_manifest(acct, fixture_dumps_dir(c.settings) / body.dump, body.project_tag)
     p.cloud_account = acct
     audit(db, principal.name, "aws.source.select", "project", p.id, "allowed", {"dump": body.dump},
           client_ip(request))

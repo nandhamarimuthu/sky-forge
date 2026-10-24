@@ -101,15 +101,6 @@ export function useRemediate(findingId: string) {
   });
 }
 
-export function useFix(findingId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (proposalId: string) =>
-      api<Proposal>(`/findings/${findingId}/fix`, { method: "POST", json: { proposal_id: proposalId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.finding(findingId) }),
-  });
-}
-
 export function useOpenPullRequest(findingId: string) {
   const qc = useQueryClient();
   return useMutation({
