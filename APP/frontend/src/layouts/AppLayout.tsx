@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useDashboard, useProjects } from "../api/hooks";
 import { Icon } from "../components/common";
@@ -22,32 +23,46 @@ export function AppLayout({ user, onLogout }: { user: { name: string; role: stri
   const badges: Record<string, number | undefined> = {
     projects: projects?.total, critical: dash?.critical_high || undefined, open: dash?.open_total || undefined,
   };
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem("sf.sidebar") === "collapsed");
+  useEffect(() => {
+    localStorage.setItem("sf.sidebar", collapsed ? "collapsed" : "expanded");
+    document.getElementById("root")?.classList.toggle("rail", collapsed);
+  }, [collapsed]);
   return (
     <>
-      <aside className="sidebar">
-        <NavLink to="/" className="brand">
+      <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
+        <button
+          className="side-toggle"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Icon name={collapsed ? "chevron-right" : "chevron-left"} />
+        </button>
+        <NavLink to="/" className="brand" title="SkyForge AI">
           <img className="brand-mark" src="/logo.svg" alt="SkyForge AI logo" />
-          <div>
+          <div className="brand-text">
             <div className="brand-name">SkyForge <span>AI</span></div>
             <div className="brand-sub">Cloud &amp; Code Command</div>
           </div>
         </NavLink>
-        <button className="side-cta" onClick={add}><Icon name="plus" /> Add services</button>
+        <button className="side-cta" onClick={add} title="Add services"><Icon name="plus" /> <span className="side-cta-label">Add services</span></button>
         <div>
           <div className="side-label">Workspace</div>
           <nav className="nav">
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} end={n.to === "/"} style={{ ["--c" as any]: n.c, ["--t" as any]: n.t }}>
+              <NavLink key={n.to} to={n.to} end={n.to === "/"} title={n.label} style={{ ["--c" as any]: n.c, ["--t" as any]: n.t }}>
                 <span className="nav-ic"><Icon name={n.icon} /></span>
-                {n.label}
+                <span className="nav-label">{n.label}</span>
                 {n.badge && badges[n.badge] ? <span className={`nav-badge ${n.badge === "critical" ? "hot" : ""}`}>{badges[n.badge]}</span> : null}
               </NavLink>
             ))}
           </nav>
         </div>
         <div className="side-user">
-          <div className="side-avatar">{user.name.slice(0, 2)}</div>
-          <div style={{ flex: 1 }}>
+          <div className="side-avatar" title={`${user.name} · ${user.role}`}>{user.name.slice(0, 2)}</div>
+          <div className="side-user-text" style={{ flex: 1 }}>
             <div className="side-user-name">{user.name}</div>
             <div className="side-user-role">{user.role}</div>
           </div>

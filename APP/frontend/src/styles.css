@@ -48,7 +48,8 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
-#root { display: grid; grid-template-columns: 284px 1fr; min-height: 100vh; }
+#root { display: grid; grid-template-columns: 284px 1fr; min-height: 100vh; transition: grid-template-columns .22s ease; }
+#root.rail { grid-template-columns: 82px 1fr; }
 h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; letter-spacing: -0.02em; }
 h2 { font-size: 1.3rem; font-weight: 700; }
 h3 { font-size: 1.05rem; font-weight: 700; }
@@ -68,11 +69,33 @@ a { color: inherit; }
 
 /* Sidebar */
 .sidebar {
-  position: sticky; top: 0; height: 100vh; overflow: hidden;
+  position: sticky; top: 0; height: 100vh; overflow: visible;
   padding: 20px 18px 16px; background: #fff; border-right: 1px solid var(--line-2);
   box-shadow: 6px 0 30px -18px rgba(91, 63, 180, .35);
   display: flex; flex-direction: column; gap: 14px; z-index: 5;
 }
+.side-toggle {
+  position: absolute; top: 26px; right: -13px; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--line-2); background: #fff; color: var(--ink-2);
+  display: grid; place-items: center; padding: 0; z-index: 6;
+  box-shadow: 0 4px 12px -4px rgba(91, 63, 180, .4); transition: color .15s, border-color .15s, background .15s;
+}
+.side-toggle:hover { color: var(--orchid); border-color: var(--orchid); background: var(--orchid-t); }
+.side-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Collapsed rail */
+.sidebar.collapsed { padding-left: 12px; padding-right: 12px; align-items: stretch; }
+.sidebar.collapsed .brand { justify-content: center; padding: 0; }
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .side-label,
+.sidebar.collapsed .side-cta-label,
+.sidebar.collapsed .nav-label,
+.sidebar.collapsed .nav-badge,
+.sidebar.collapsed .side-user-text { display: none; }
+.sidebar.collapsed .side-cta { gap: 0; }
+.sidebar.collapsed .nav a { justify-content: center; gap: 0; padding: 6px 0; }
+.sidebar.collapsed .nav a.active::before { left: -12px; }
+.sidebar.collapsed .side-user { flex-direction: column; gap: 8px; padding: 10px 0 0; }
 .brand { display: flex; gap: 12px; align-items: center; padding: 0 6px; text-decoration: none; }
 .brand-mark { width: 44px; height: 44px; border-radius: 13px; display: block; flex: none; box-shadow: 0 8px 20px -8px rgba(198, 85, 174, .7); }
 .brand-name { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; line-height: 1.1; }

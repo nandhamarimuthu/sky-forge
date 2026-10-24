@@ -146,6 +146,8 @@ const ICONS: Record<string, ReactNode> = {
   download: <path d="M12 4v12m0 0-5-5m5 5 5-5M4 20h16" />,
   logout: <path d="M15 4h4v16h-4M10 16l-4-4 4-4M6 12h12" />,
   external: <path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" />,
+  "chevron-left": <path d="M15 5l-7 7 7 7" />,
+  "chevron-right": <path d="M9 5l7 7-7 7" />,
 };
 
 export function Icon({ name }: { name: keyof typeof ICONS | string }) {
