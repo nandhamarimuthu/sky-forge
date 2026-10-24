@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: skyforge-ai
+Version: 0.1.0
+Summary: SkyForge AI — autonomous engineering platform: security, testing, code health and AWS cost agents.
+Requires-Python: <3.13,>=3.11
+Requires-Dist: fastapi==0.115.6
+Requires-Dist: uvicorn[standard]==0.32.1
+Requires-Dist: pydantic==2.14.1
+Requires-Dist: pydantic-settings==2.16.1
+Requires-Dist: sqlalchemy==2.0.36
+Requires-Dist: alembic==1.14.0
+Requires-Dist: httpx==0.28.1
+Requires-Dist: packaging==24.2
+Requires-Dist: radon==6.0.1
+Requires-Dist: ruff==0.8.4
+Requires-Dist: boto3==1.35.90
+Requires-Dist: python-multipart==0.0.20
+Provides-Extra: dev
+Requires-Dist: pytest==8.3.4; extra == "dev"
+Requires-Dist: pytest-cov==6.0.0; extra == "dev"
+Requires-Dist: mypy==1.14.1; extra == "dev"
+Provides-Extra: llm
+Requires-Dist: crewai==0.86.0; extra == "llm"
