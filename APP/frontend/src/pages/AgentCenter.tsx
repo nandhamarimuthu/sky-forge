@@ -28,7 +28,7 @@ export function AgentCenterPage() {
             const busy = a.status === "running";
             const total = Object.values(a.runs_by_status).reduce((x, y) => x + y, 0);
             return (
-              <article key={a.id} className={`agent click ${a.id === "guardrails" ? "guard" : ""} ${selected === a.id ? "sel" : ""}`}
+              <article key={a.id} className={`agent click ${selected === a.id ? "sel" : ""}`}
                 style={{ ["--c" as any]: m.c, ["--t" as any]: m.t }} onClick={() => { setSelected(a.id); setScanId(null); }}>
                 <div className="agent-top">
                   <div className="agent-num">{m.num}</div>
