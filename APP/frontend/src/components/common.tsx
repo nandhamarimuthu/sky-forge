@@ -123,7 +123,7 @@ export function SimBanner({ show, children }: { show: boolean; children?: ReactN
   return (
     <div className="banner sim">
       <b>Simulated AWS data.</b>
-      <span>{children ?? "Inventory, utilisation and spend come from the mock adapter — savings are illustrative estimates, not measured spend."}</span>
+      <span>{children ?? "One month of usage, utilisation and spend was simulated from the AWS resources declared in this repository's Terraform — savings are illustrative. Upload a real export for measured numbers."}</span>
     </div>
   );
 }

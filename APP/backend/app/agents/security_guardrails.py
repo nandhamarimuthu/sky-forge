@@ -79,6 +79,69 @@ CODE_RULES: list[CodeRule] = [
     CodeRule("js-sql-concat", "high", "SQL built with string concatenation",
              re.compile(r"(?i)(query|execute)\(\s*[`'\"][^`'\"]*\b(select|insert|update|delete)\b[^`'\"]*[`'\"]\s*\+|\$\{[^}]+\}[^`]*\b(from|where)\b"),
              (".js", ".ts"), "Use parameterised queries."),
+    CodeRule("js-tls-verify-off", "medium", "TLS certificate verification disabled",
+             re.compile(r"rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['\"]?0"),
+             (".js", ".ts", ".mjs", ".cjs"), "Keep certificate verification on; add the CA to the trust store."),
+    # JVM (Java / Kotlin / Scala)
+    CodeRule("java-cmd-exec", "high", "Runtime.exec / ProcessBuilder with dynamic input",
+             re.compile(r"Runtime\.getRuntime\(\)\.exec\(|new ProcessBuilder\([^)]*\+"),
+             (".java", ".kt", ".scala"), "Pass a fixed argument array; never build commands from input."),
+    CodeRule("java-sql-concat", "high", "SQL built with string concatenation",
+             re.compile(r"(?i)(executeQuery|executeUpdate|execute|prepareStatement|createQuery)\(\s*\"[^\"]*\b(select|insert|update|delete)\b[^\"]*\"\s*\+"),
+             (".java", ".kt", ".scala"), "Use PreparedStatement with bind parameters."),
+    CodeRule("java-deserialization", "high", "Java native deserialisation of untrusted data",
+             re.compile(r"new ObjectInputStream\(|\.readObject\(\)|XMLDecoder\("),
+             (".java", ".kt", ".scala"), "Avoid native deserialisation; use JSON with an allow-listed schema."),
+    CodeRule("java-weak-hash", "low", "Weak hash algorithm (MD5/SHA1)",
+             re.compile(r"MessageDigest\.getInstance\(\s*\"(MD5|SHA-?1)\""), (".java", ".kt", ".scala"),
+             "Use SHA-256+ (or bcrypt/argon2 for passwords)."),
+    CodeRule("java-tls-trust-all", "high", "TrustManager/HostnameVerifier that trusts everything",
+             re.compile(r"X509TrustManager|ALLOW_ALL_HOSTNAME_VERIFIER|NoopHostnameVerifier|setHostnameVerifier\(\(.*\)\s*->\s*true"),
+             (".java", ".kt", ".scala"), "Use the default trust manager and hostname verification."),
+    # Go
+    CodeRule("go-tls-insecure", "high", "TLS InsecureSkipVerify enabled", re.compile(r"InsecureSkipVerify\s*:\s*true"),
+             (".go",), "Remove InsecureSkipVerify; configure RootCAs instead."),
+    CodeRule("go-sql-sprintf", "high", "SQL built with fmt.Sprintf (injection risk)",
+             re.compile(r"(?i)(Query|QueryRow|Exec)(Context)?\([^)]*fmt\.Sprintf\(\s*\"[^\"]*\b(select|insert|update|delete)\b"),
+             (".go",), "Use placeholders ($1 / ?) with arguments."),
+    CodeRule("go-shell-exec", "high", "exec.Command through a shell",
+             re.compile(r"exec\.Command(Context)?\([^)]*\"(ba)?sh\"\s*,\s*\"-c\""),
+             (".go",), "Call the binary directly with an argument list."),
+    CodeRule("go-weak-hash", "low", "Weak hash algorithm (MD5/SHA1)", re.compile(r"\b(md5|sha1)\.(New|Sum)\("),
+             (".go",), "Use crypto/sha256 or a password hash (bcrypt/argon2)."),
+    # Ruby
+    CodeRule("rb-eval", "high", "Dynamic code evaluation",
+             re.compile(r"(?<![.\w])(eval|instance_eval|class_eval)\s*\(?\s*[a-z@]"),
+             (".rb",), "Avoid eval on dynamic input."),
+    CodeRule("rb-shell", "high", "Shell command with interpolation", re.compile(r"(system|exec|`|%x)\s*\(?[^\n]*#\{"),
+             (".rb",), "Use the multi-argument form system(cmd, arg1, ...)."),
+    CodeRule("rb-yaml-load", "high", "YAML.load / Marshal.load of untrusted data", re.compile(r"\b(YAML|Psych|Marshal)\.load\("),
+             (".rb",), "Use YAML.safe_load; never Marshal.load untrusted input."),
+    CodeRule("rb-sql-interp", "high", "SQL with string interpolation",
+             re.compile(r"(?i)\.(where|find_by_sql|execute|order)\(\s*\"[^\"]*#\{"), (".rb",),
+             "Use bound parameters: where('name = ?', name)."),
+    # PHP
+    CodeRule("php-exec", "high", "Shell / code execution",
+             re.compile(r"\b(eval|shell_exec|system|passthru|exec|popen|proc_open)\s*\(\s*\$"),
+             (".php",), "Avoid shell execution; escape with escapeshellarg if unavoidable."),
+    CodeRule("php-sql-concat", "high", "SQL built from request input",
+             re.compile(r"(?i)(mysqli_query|->query|mysql_query)\([^)]*\$_(GET|POST|REQUEST|COOKIE)"), (".php",),
+             "Use PDO prepared statements."),
+    CodeRule("php-unserialize", "high", "unserialize() of untrusted data", re.compile(r"\bunserialize\s*\(\s*\$_"),
+             (".php",), "Use json_decode instead."),
+    # .NET
+    CodeRule("cs-binaryformatter", "high", "BinaryFormatter / insecure deserialisation",
+             re.compile(r"new BinaryFormatter\(|TypeNameHandling\.(All|Auto|Objects)"), (".cs",),
+             "Use System.Text.Json without polymorphic type handling."),
+    CodeRule("cs-sql-concat", "high", "SQL built with string concatenation",
+             re.compile(r"(?i)new SqlCommand\(\s*\"[^\"]*\b(select|insert|update|delete)\b[^\"]*\"\s*\+"), (".cs",),
+             "Use SqlParameter / parameterised queries."),
+    CodeRule("cs-process-start", "medium", "Process.Start with dynamic input", re.compile(r"Process\.Start\([^)]*\+"),
+             (".cs",), "Validate and pass arguments separately via ProcessStartInfo.ArgumentList."),
+    # Rust
+    CodeRule("rs-tls-insecure", "high", "Certificate validation disabled",
+             re.compile(r"danger_accept_invalid_certs\(\s*true\s*\)|danger_accept_invalid_hostnames\(\s*true\s*\)"),
+             (".rs",), "Keep certificate validation enabled."),
 ]
 
 INJECTION_BAIT = re.compile(r"(?i)(ignore (all )?(previous|prior|above) instructions|disregard (the )?system prompt|"
@@ -97,12 +160,13 @@ DANGEROUS_ADDED = [
 PROTECTED_PATHS = re.compile(r"(^|/)(\.git|\.github/workflows|\.gitlab-ci\.yml|Jenkinsfile|\.env[^/]*|.*\.pem|.*\.key|"
                              r"id_rsa[^/]*|\.npmrc|\.pypirc)$|(^|/)\.git/")
 MANIFESTS = {"requirements.txt", "pyproject.toml", "package.json", "go.mod", "requirements-dev.txt",
-             "requirements-test.txt", "requirements_dev.txt", "test-requirements.txt"}
+             "requirements-test.txt", "requirements_dev.txt", "test-requirements.txt", "pom.xml", "build.gradle",
+             "build.gradle.kts", "Gemfile.lock", "composer.lock", "Cargo.toml"}
 KIND_RULES: dict[str, dict[str, Any]] = {
     "dependency_upgrade": {"exts": None, "new_files": False},
-    "test_addition": {"exts": {".py"}, "new_files": True, "dir": re.compile(r"^(tests?|skyforge_tests)/")},
-    "functional_test": {"exts": {".py", ".js", ".ts"}, "new_files": True,
-                        "dir": re.compile(r"^(tests?|skyforge_tests)/")},
+    "test_addition": {"exts": {".py", ".js", ".mjs", ".cjs", ".ts", ".go"}, "new_files": True,
+                      "dir": re.compile(r"^tests?/|_skyforge_test\.go$")},
+    "functional_test": {"exts": {".py", ".js", ".ts"}, "new_files": True, "dir": re.compile(r"^tests?/")},
     "refactor": {"exts": {".py"}, "new_files": False},
     "config_fix": {"exts": {".py", ".js", ".ts", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ".tf"},
                    "new_files": False},
@@ -224,7 +288,8 @@ class PolicyEngine:
                 bad_paths.append(f"{path} (protected path)")
             if rules:
                 exts = rules["exts"]
-                if kind == "dependency_upgrade" and Path(path).name not in MANIFESTS:
+                if kind == "dependency_upgrade" and Path(path).name not in MANIFESTS and \
+                        Path(path).suffix not in (".csproj", ".fsproj", ".vbproj"):
                     bad_paths.append(f"{path} (not a dependency manifest)")
                 elif exts is not None and Path(path).suffix not in exts:
                     bad_paths.append(f"{path} (extension not allowed for {kind})")

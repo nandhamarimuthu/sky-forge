@@ -30,18 +30,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     with session_scope() as db:
         llm = db.get(Setting, "llm")
         if llm and llm.value:
-            c.llm.provider = llm.value.get("llm_provider", c.llm.provider)
-            c.llm.ollama_model = llm.value.get("ollama_model", c.llm.ollama_model)
-            c.llm.openai_model = llm.value.get("openai_model", c.llm.openai_model)
+            c.llm.model = llm.value.get("ollama_model", c.llm.model)
             c.llm.enabled = llm.value.get("llm_enabled", c.llm.enabled)
-        secrets = db.get(Setting, "llm_secrets")
-        if secrets and secrets.value:
-            c.llm.api_key_override = secrets.value.get("openai_api_key") or None
     c.worker.reconcile()
     status = c.llm.status(force=True)
-    log.info("SkyForge AI ready — LLM provider=%s reachable=%s model=%s available=%s, sandbox=%s, aws_mode=%s",
-             c.llm.provider, status["reachable"], c.llm.model, status["model_available"], c.sandbox.available(),
-             c.settings.aws_mode)
+    log.info("SkyForge AI ready — LLM reachable=%s model=%s available=%s, sandbox=%s, aws_mode=%s",
+             status["reachable"], c.llm.model, status["model_available"], c.sandbox.available(), c.settings.aws_mode)
     yield
     c.worker.shutdown()
 

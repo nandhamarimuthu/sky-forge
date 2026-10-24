@@ -7,11 +7,13 @@ access but writes only into the throwaway copy. If Docker is unavailable, execut
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET  # noqa: S405 - parsing junit produced inside our own sandbox
@@ -35,8 +37,6 @@ class SandboxResult:
     coverage_percent: float | None = None
     coverage_files: dict[str, float] = field(default_factory=dict)
     missing_lines: dict[str, list[int]] = field(default_factory=dict)
-    statements: dict[str, int] = field(default_factory=dict)
-    missing_counts: dict[str, int] = field(default_factory=dict)
     duration_s: float = 0.0
     failures: list[dict] = field(default_factory=list)
     log_tail: str = ""
@@ -44,45 +44,73 @@ class SandboxResult:
 
 
 class DockerSandbox:
-    def __init__(self, image: str, memory: str, cpus: str, timeout_s: int, enabled: bool = True):
+    def __init__(self, image: str, memory: str, cpus: str, timeout_s: int, enabled: bool = True,
+                 cache_dir: Path | None = None):
         self.image = image
         self.memory = memory
         self.cpus = cpus
         self.timeout_s = timeout_s
         self.enabled = enabled
+        self.cache_dir = cache_dir
         self._available: bool | None = None
+        self._availability_checked_at = 0.0
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _cache_key(self, work: Path, script: str) -> str | None:
+        """Key on image + install script + requirement files; projects that install themselves are not cached."""
+        if self.cache_dir is None or (work / "pyproject.toml").is_file() or (work / "setup.py").is_file():
+            return None
+        h = hashlib.sha256(f"{self.image}\n{script}".encode())
+        for p in sorted(work.glob("requirements*.txt")) + sorted(work.glob("requirements/*.txt")):
+            h.update(p.name.encode() + p.read_bytes())
+        return h.hexdigest()[:24]
+
+    def _lock(self, key: str) -> threading.Lock:
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.Lock())
 
     def available(self) -> bool:
         if not self.enabled:
             return False
-        if self._available is None:
-            exe = shutil.which("docker")
-            if not exe:
+        now = time.monotonic()
+        if self._available is True or (self._available is False and now - self._availability_checked_at < 5):
+            return bool(self._available)
+        exe = shutil.which("docker")
+        if not exe:
+            self._available = False
+        else:
+            try:
+                r = subprocess.run([exe, "info", "--format", "{{.ServerVersion}}"], capture_output=True,
+                                   text=True, timeout=15, check=False)
+                self._available = r.returncode == 0
+            except (subprocess.TimeoutExpired, OSError):
                 self._available = False
-            else:
-                try:
-                    r = subprocess.run([exe, "info", "--format", "{{.ServerVersion}}"], capture_output=True,
-                                       text=True, timeout=15, check=False)
-                    self._available = r.returncode == 0
-                except (subprocess.TimeoutExpired, OSError):
-                    self._available = False
+        self._availability_checked_at = now
         return self._available
 
-    def _ensure_image(self) -> None:
-        r = subprocess.run(["docker", "image", "inspect", self.image], capture_output=True, timeout=30, check=False)
+    def _ensure_image(self, image: str | None = None) -> None:
+        image = image or self.image
+        r = subprocess.run(["docker", "image", "inspect", image], capture_output=True, timeout=30, check=False)
         if r.returncode != 0:
-            log.info("Pulling sandbox image %s", self.image)
-            subprocess.run(["docker", "pull", "-q", self.image], capture_output=True, timeout=600, check=True)
+            log.info("Pulling sandbox image %s", image)
+            subprocess.run(["docker", "pull", "-q", image], capture_output=True, timeout=600, check=True)
 
-    def _docker(self, work: Path, script: str, network: bool, timeout: int) -> tuple[int | None, str]:
+    def toolchain(self, repo: Path, image: str, env: dict[str, str] | None = None) -> ToolchainSession:
+        return ToolchainSession(self, repo, image, env or {})
+
+    def _docker(self, work: Path, script: str, network: bool, timeout: int, image: str | None = None,
+                env: dict[str, str] | None = None) -> tuple[int | None, str]:
         name = f"skyforge-sbx-{uuid.uuid4().hex[:10]}"
         cmd = ["docker", "run", "--rm", "--name", name, "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                "--memory", self.memory, "--cpus", self.cpus, "--pids-limit", "512", "--read-only",
                "--tmpfs", "/tmp:rw,size=512m", "-e", "HOME=/tmp", "-e", "PIP_DISABLE_PIP_VERSION_CHECK=1",  # noqa: S108
                "-e", "PYTHONDONTWRITEBYTECODE=1", "-v", f"{work}:/work:rw", "-w", "/work"]
+        for k, v in (env or {}).items():
+            cmd += ["-e", f"{k}={v}"]
         if not network:
             cmd += ["--network", "none"]
-        cmd += [self.image, "sh", "-c", script]
+        cmd += [image or self.image, "sh", "-c", script]
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
             return r.returncode, (r.stdout + r.stderr)[-6000:]
@@ -165,9 +193,6 @@ class DockerSandbox:
                         continue
                     res.coverage_files[f] = round(float(meta["summary"]["percent_covered"]), 1)
                     res.missing_lines[f] = list(meta.get("missing_lines", []))[:400]
-                    res.statements[f] = int(meta["summary"].get("num_statements", 0))
-                    res.missing_counts[f] = int(meta["summary"].get("missing_lines",
-                                                                    len(meta.get("missing_lines", []))))
             except (KeyError, ValueError, json.JSONDecodeError):
                 pass
         if code == 5 or (res.total == 0 and junit.exists()):
@@ -231,8 +256,29 @@ class SandboxSession:
             self.sb._ensure_image()
         except (subprocess.SubprocessError, OSError) as exc:
             return SandboxResult(status="error", reason=f"Could not pull sandbox image: {exc}"[:500])
-        code, out = self.sb._docker(self.work, DockerSandbox._install_script(self.work), network=True,
-                                    timeout=self.sb.timeout_s)
+        script = DockerSandbox._install_script(self.work)
+        key = self.sb._cache_key(self.work, script)
+        if key is None:
+            return self._install(script, started)
+        cached = self.sb.cache_dir / key  # type: ignore[operator]
+        with self.sb._lock(key):
+            if not cached.is_dir():
+                err = self._install(script, started)
+                if err:
+                    return err
+                tmp = cached.with_name(f"{key}.tmp-{uuid.uuid4().hex[:6]}")
+                cached.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(self.work / ".sf_deps", tmp, symlinks=True)
+                tmp.rename(cached)
+                return None
+        shutil.copytree(cached, self.work / ".sf_deps", symlinks=True, dirs_exist_ok=True)
+        self.install_log = f"Dependencies restored from cache {key}"
+        self.installed = True
+        return None
+
+    def _install(self, script: str, started: float) -> SandboxResult | None:
+        assert self.work is not None
+        code, out = self.sb._docker(self.work, script, network=True, timeout=self.sb.timeout_s)
         self.install_log = out
         if code != 0:
             return SandboxResult(status="error", exit_code=code, reason="Dependency installation failed",
@@ -258,3 +304,71 @@ class SandboxSession:
         assert self.work is not None
         return self.sb._docker(self.work, f"PYTHONPATH=/work/.sf_deps:/work python '{script_rel}'", network=False,
                                timeout=self.sb.timeout_s)
+
+
+class ToolchainSession(SandboxSession):
+    """A throwaway repo copy executed with another language image (Node, Go, ...). Same isolation rules."""
+
+    def __init__(self, sandbox: DockerSandbox, repo: Path, image: str, env: dict[str, str]):
+        super().__init__(sandbox, repo)
+        self.image = image
+        self.env = env
+
+    def __enter__(self) -> ToolchainSession:
+        self.work = DockerSandbox._copy(self.repo, None)
+        return self
+
+    def prepare(self, install_script: str, cache_paths: list[str] | None = None,
+                key_files: list[str] | None = None) -> SandboxResult | None:
+        """Pull the image and run the dependency step with network, restoring/saving `cache_paths` keyed on
+        `key_files`. Returns an error result on failure."""
+        assert self.work is not None
+        if not self.sb.available():
+            return SandboxResult(status="not_executed", reason="Docker sandbox unavailable — execution refused")
+        try:
+            self.sb._ensure_image(self.image)
+        except (subprocess.SubprocessError, OSError) as exc:
+            return SandboxResult(status="error", reason=f"Could not pull {self.image}: {exc}"[:500])
+        if not install_script:
+            return None
+        key = None
+        if cache_paths and key_files and self.sb.cache_dir is not None:
+            h = hashlib.sha256(f"{self.image}\n{install_script}".encode())
+            for name in key_files:
+                p = self.work / name
+                h.update(name.encode() + (p.read_bytes() if p.is_file() else b"-"))
+            key = "tc-" + h.hexdigest()[:24]
+        if key is not None:
+            cached = self.sb.cache_dir / key  # type: ignore[operator]
+            with self.sb._lock(key):
+                if cached.is_dir():
+                    for rel in cache_paths or []:
+                        if (cached / rel).is_dir():
+                            shutil.copytree(cached / rel, self.work / rel, symlinks=True, dirs_exist_ok=True)
+                    self.install_log = f"Dependencies restored from cache {key}"
+                    return None
+                err = self._prepare_run(install_script)
+                if err is None:
+                    tmp = cached.with_name(f"{key}.tmp-{uuid.uuid4().hex[:6]}")
+                    for rel in cache_paths or []:
+                        if (self.work / rel).is_dir():
+                            shutil.copytree(self.work / rel, tmp / rel, symlinks=True)
+                    tmp.mkdir(parents=True, exist_ok=True)
+                    tmp.rename(cached)
+                return err
+        return self._prepare_run(install_script)
+
+    def _prepare_run(self, install_script: str) -> SandboxResult | None:
+        assert self.work is not None
+        code, out = self.sb._docker(self.work, install_script, network=True, timeout=self.sb.timeout_s,
+                                    image=self.image, env=self.env)
+        self.install_log = out
+        if code != 0:
+            return SandboxResult(status="error", exit_code=code, reason="Dependency installation failed",
+                                 log_tail=out[-3000:])
+        return None
+
+    def sh(self, script: str, timeout: int | None = None) -> tuple[int | None, str]:
+        assert self.work is not None
+        return self.sb._docker(self.work, script, network=False, timeout=timeout or self.sb.timeout_s,
+                               image=self.image, env=self.env)

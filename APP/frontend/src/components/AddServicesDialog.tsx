@@ -126,7 +126,7 @@ function AddServicesForm({ onClose }: { onClose: () => void }) {
       <div className="form-row" style={{ marginTop: 14 }}>
         <label className="field"><span>AWS cost data (one-month dump)</span>
           <select className="select input" value={dump} onChange={(e) => setDump(e.target.value)}>
-            <option value="">Auto — matching sample, else shared-platform</option>
+            <option value="">Simulate from the repo's Terraform (skipped if none)</option>
             {(dumps ?? []).map((d) => (
               <option key={d.name} value={d.name}>{d.name} · {d.account_id} · {d.region} · {d.period_start} → {d.period_end}</option>
             ))}

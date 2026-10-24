@@ -37,7 +37,6 @@ export interface Proposal {
   id: string; finding_id: string; agent_id: AgentId; kind: string; title: string; summary: string; diff: string;
   files: string[]; breaking: boolean; status: string; validation: { passed?: boolean; checks?: Check[]; policy_version?: string; breaking_change?: boolean };
   verification: { status?: string; checks?: Check[]; summary?: string; rollback?: string; error?: string;
-    pull_request_error?: string;
     pull_request?: { url: string; number: number; repo: string; mode: string; branch: string; base: string } };
   branch: string | null; base_commit: string | null; commit_sha: string | null; created_at: string; updated_at: string;
 }

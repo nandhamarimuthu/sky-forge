@@ -40,7 +40,7 @@ function DataSource({ projectId, source, mode, errors }: { projectId: string; so
     <div className="card" style={{ padding: 18 }}>
       <div className="row wrap" style={{ gap: 14 }}>
         <div style={{ flex: 1, minWidth: 260 }}>
-          <div className="kpi-label">Data source · AWS export</div>
+          <div className="kpi-label">Data source · {source?.dump === "terraform" ? "simulated from Terraform" : "AWS export"}</div>
           <div style={{ fontWeight: 700, marginTop: 4 }}>
             {source?.dump ?? "—"} · account <span className="mono">{source?.account_id ?? "?"}</span> · {source?.region ?? "?"} · {source?.period_start} → {source?.period_end}
           </div>
@@ -48,8 +48,9 @@ function DataSource({ projectId, source, mode, errors }: { projectId: string; so
           {errors.length > 0 && <div className="error-box" style={{ marginTop: 8 }}>{errors.join("; ")}</div>}
         </div>
         <select className="select input" style={{ width: 220 }} disabled={busy} value="" onChange={(e) => e.target.value && select(e.target.value)} aria-label="Switch data dump">
-          <option value="">Switch to bundled dump…</option>
-          {(dumps ?? []).map((d) => <option key={d.name} value={d.name}>{d.name} ({d.region})</option>)}
+          <option value="">Switch data source…</option>
+          <option value="terraform">Simulate from repo Terraform</option>
+          {(dumps ?? []).map((d) => <option key={d.name} value={d.name}>Bundled dump: {d.name} ({d.region})</option>)}
         </select>
         <input ref={fileRef} type="file" accept=".zip" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
         <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}><Icon name="download" /> Upload export (.zip)</button>

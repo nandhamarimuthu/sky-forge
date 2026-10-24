@@ -62,7 +62,12 @@ class AwsOptimizerAgent(BaseAgent):
     def run(self, ctx: AgentContext) -> AgentResult:
         ws = ctx.tool("repo.read")
         tf = ctx.tool("terraform.parse")(ws)
-        adapter: AwsAdapter = ctx.tool("aws.read")(iac_hints(tf))
+        adapter: AwsAdapter | None = ctx.tool("aws.read")(iac_hints(tf), tf)
+        if adapter is None:
+            ctx.log("No AWS resources declared in Terraform and no AWS data dump selected — skipping")
+            return AgentResult(agent_id="aws_optimizer", status="skipped", tools_used=["terraform.parse"],
+                               notes=["Skipped: the repository has no AWS Terraform resources to simulate"],
+                               metrics={"skipped": True, "terraform_resources": len(tf)})
         simulated = adapter.report.simulated
         dump = adapter.report.mode == "dump"
         source = "simulated" if simulated else "estimated"

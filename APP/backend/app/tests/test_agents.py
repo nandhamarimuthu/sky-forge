@@ -21,7 +21,7 @@ def make_ctx(ws, agent_id: str, options: dict | None = None) -> tuple[AgentConte
     tools = {"repo.read": ws, "osv.query": FakeOSV(), "manifest.patch": upgrade_patch,
              "sandbox.execute": DockerSandbox("python:3.11-slim", "1g", "1", 60, enabled=False),
              "static.ruff": True, "static.radon": True, "terraform.parse": parse_terraform,
-             "aws.read": lambda hints=None: DumpAwsAdapter(get_settings().fixtures_dir / "aws" / "demo-shop",
+             "aws.read": lambda hints=None, tf=None: DumpAwsAdapter(get_settings().fixtures_dir / "aws" / "demo-shop",
                                                            "demo-shop", hints),
              "llm.generate": None}
     ctx = AgentContext(scan_id="scan_test", project={"id": "p", "aws": {"account_id": "123456789012"}}, workspace=ws,
@@ -83,7 +83,7 @@ def test_aws_agent_iac_patches_pass_policy(fixture_ws):
 
 def test_aws_agent_on_one_month_data_dump(fixture_ws, settings):
     ctx, _ = make_ctx(fixture_ws, "aws_optimizer")
-    ctx.tools["aws.read"] = lambda hints=None: DumpAwsAdapter(settings.fixtures_dir / "aws" / "demo-shop", "demo-shop",
+    ctx.tools["aws.read"] = lambda hints=None, tf=None: DumpAwsAdapter(settings.fixtures_dir / "aws" / "demo-shop", "demo-shop",
                                                               hints)
     res = AGENTS["aws_optimizer"].run(ctx)
     rules = {f.rule_id for f in res.findings}
@@ -97,75 +97,37 @@ def test_aws_agent_on_one_month_data_dump(fixture_ws, settings):
     assert rightsize.evidence["actual_monthly_cost"] > 0 and rightsize.evidence["period_days"] == 30
 
 
+def test_aws_data_simulated_from_terraform(fixture_ws, tmp_path):
+    from app.adapters.aws.synth import synthesize_from_terraform
+
+    tf = parse_terraform(fixture_ws)
+    n = synthesize_from_terraform(tf, tmp_path / "sim", tag="demo-shop", account="123456789012",
+                                  region="eu-west-2", seed_key="p1")
+    assert n >= 2
+    adapter = DumpAwsAdapter(tmp_path / "sim", "demo-shop", [{"type": r.type, "name": r.name,
+                                                              "address": r.address} for r in tf])
+    inv = adapter.inventory()
+    assert any(r.iac_address == "aws_instance.api" for r in inv)
+    assert adapter.cost().by_service and not adapter.report.errors
+    # Deterministic per project.
+    synthesize_from_terraform(tf, tmp_path / "sim2", tag="demo-shop", account="123456789012", region="eu-west-2",
+                              seed_key="p1")
+    assert (tmp_path / "sim" / "ec2_instances.json").read_text() == (tmp_path / "sim2" / "ec2_instances.json").read_text()
+
+
+def test_aws_agent_skips_without_terraform(fixture_ws):
+    ctx, _ = make_ctx(fixture_ws, "aws_optimizer")
+    ctx.tools["aws.read"] = lambda hints=None, tf=None: None
+    res = AGENTS["aws_optimizer"].run(ctx)
+    assert res.status == "skipped" and not res.findings
+
+
 def test_unit_test_agent_without_sandbox_fails_closed(fixture_ws):
     ctx, _ = make_ctx(fixture_ws, "unit_test")
     res = AGENTS["unit_test"].run(ctx)
     assert res.test_runs and res.test_runs[0].status == "not_executed"
     assert res.metrics["sandbox_executed"] is False
     assert any(f.category == "coverage" for f in res.findings)
-
-
-def test_unit_test_agent_suggests_where_to_improve_coverage(fixture_ws):
-    ctx, _ = make_ctx(fixture_ws, "unit_test")
-    res = AGENTS["unit_test"].run(ctx)
-    module = next(f for f in res.findings if f.rule_id == "coverage:module")
-    assert "Where to improve coverage in" in module.recommendation
-    targets = module.evidence["coverage_targets"]
-    assert targets and all({"function", "line", "uncovered_lines"} <= set(t) for t in targets)
-
-    roadmap = next(f for f in res.findings if f.rule_id == "coverage:roadmap")
-    assert roadmap.severity == "info" and roadmap.target == "repository"
-    assert "Improve coverage in this order" in roadmap.recommendation
-    assert roadmap.evidence["modules"] and roadmap.evidence["modules"][0]["start_with"]
-    assert res.metrics["modules_needing_coverage"] >= 1
-
-
-def test_coverage_line_ranges_and_gap_ranking():
-    from app.adapters.scanners.code_metrics import FunctionInfo
-    from app.agents.unit_test_agent import function_gaps, line_ranges
-
-    assert line_ranges([3, 1, 2, 7, 8, 20]) == "1-3, 7-8, 20"
-    assert line_ranges([]) == ""
-    simple = FunctionInfo("a", "a", "m.py", 1, 5, 1, [], False, False, [], None, None)
-    complex_fn = FunctionInfo("b", "b", "m.py", 10, 20, 9, [], False, False, [], None, None)
-    gaps = function_gaps([simple, complex_fn], [2, 3, 11, 12, 13])
-    assert [g.function.name for g in gaps] == ["b", "a"]  # higher complexity × more lines ranks first
-    assert gaps[0].missing == [11, 12, 13]
-
-
-def test_route_handlers_are_testable_but_context_and_global_state_are_not(tmp_path):
-    import threading
-
-    from app.adapters.repository.git_repo import RepoWorkspace
-    from app.adapters.scanners.code_metrics import analyse_python_module
-    from app.agents.base import AgentContext
-    from app.agents.unit_test_agent import GENERATED_DIR, build_cases, generated_test_path, is_route_handler
-
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "svc.py").write_text(
-        "from flask import Flask, request\n"
-        "app = Flask(__name__)\n"
-        "store = []\n\n"
-        "@app.route('/hi')\n"
-        "def hi():\n    return 'hi'\n\n"
-        "@app.route('/n/<int:item_id>')\n"
-        "def pick(item_id):\n    return item_id * 2\n\n"
-        "@app.route('/items')\n"
-        "def listing():\n    return {'items': store}\n\n"
-        "@app.route('/add', methods=['POST'])\n"
-        "def take():\n    return request.get_json()\n\n"
-        "@app.cli.command('seed')\n"
-        "def seed():\n    return 1\n", encoding="utf-8")
-    ws = RepoWorkspace(tmp_path)
-    fns = analyse_python_module(ws, tmp_path / "svc.py").functions
-    ctx = AgentContext(scan_id="s", project={}, workspace=ws, options={}, tools={}, allowed_tools=frozenset(),
-                       emit=lambda *a, **k: None, cancel_event=threading.Event())
-    names = {f.name for f in AGENTS["unit_test"]._candidates(ctx, fns, set(), set())}
-    assert names == {"hi", "pick"}, names  # listing reads a mutable global, take needs a request context
-    assert is_route_handler(next(f for f in fns if f.name == "hi"))
-    # Unannotated `item_id` is inferred as an int, so representative cases can be built.
-    assert build_cases(next(f for f in fns if f.name == "pick"))
-    assert generated_test_path("app.routes") == f"{GENERATED_DIR}/test_app_routes.py"
 
 
 def test_functional_agent_generates_suite(fixture_ws):
@@ -192,7 +154,7 @@ def test_codemod_diff_ending_on_blank_context_line_still_applies(settings, tmp_p
     assert PolicyEngine(ws).validate(prop)["passed"]
 
     ctx, _ = make_ctx(ws, "aws_optimizer")
-    ctx.tools["aws.read"] = lambda hints=None: DumpAwsAdapter(settings.fixtures_dir / "aws" / "orders-api",
+    ctx.tools["aws.read"] = lambda hints=None, tf=None: DumpAwsAdapter(settings.fixtures_dir / "aws" / "orders-api",
                                                               "orders-api", hints)
     res = AGENTS["aws_optimizer"].run(ctx)
     rds = next(f for f in res.findings if f.rule_id == "aws:rds-rightsize")
@@ -213,3 +175,20 @@ def test_drop_failing_llm_tests_keeps_the_rest():
             "def test_bad(x):\n    assert x == 2\n")
     out = _drop_tests(code, {"test_bad"})
     assert out is not None and "def test_ok" in out and "test_bad" not in out and "parametrize" not in out
+
+
+def test_polyglot_test_pruning_and_exports():
+    from app.agents.polyglot_tests import _js_exports, drop_go_tests, drop_js_tests
+
+    js = ("import test from 'node:test';\nimport assert from 'node:assert/strict';\n"
+          "test('ok case', () => { assert.equal(f('a)'), 1); });\n"
+          "test('bad case', () => {\n  assert.equal(f(\"}\"), 2);\n});\n")
+    out = drop_js_tests(js, {"bad case"})
+    assert out is not None and "ok case" in out and "bad case" not in out
+    go = ("package calc\nimport \"testing\"\nfunc TestSkyforgeAddOk(t *testing.T) {\n if Add(1, 2) \\!= 3 { t.Fatal(\"}\") }\n}\n"
+          "func TestSkyforgeAddBad(t *testing.T) {\n if Add(1, 1) \\!= 3 { t.Fatal(\"x\") }\n}\n")
+    out = drop_go_tests(go, {"TestSkyforgeAddBad"})
+    assert out is not None and "TestSkyforgeAddOk" in out and "TestSkyforgeAddBad" not in out
+    src = ("export function a() {}\nexport const b = () => 1;\nfunction c() {}\nmodule.exports = { c, d: c };\n"
+           "export { e as f };\n")
+    assert {"a", "b", "c", "d", "f"} <= _js_exports(src)
