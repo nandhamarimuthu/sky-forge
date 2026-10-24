@@ -12,62 +12,25 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from app.adapters.repository.git_repo import RepoWorkspace
+from app.adapters.scanners.js_refactor import unused_require_edits
+from app.adapters.scanners.languages import TEST_PATH as _TEST_PATH
+from app.adapters.scanners.languages import discover_routes_textual
+from app.adapters.scanners.languages import is_test_path as _is_test_path
 
-CODE_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".go", ".java", ".kt", ".kts", ".scala",
-             ".rb", ".php", ".cs", ".cpp", ".cc", ".cxx", ".c", ".h", ".hpp", ".swift", ".rs", ".lua", ".m",
-             ".erl", ".vue", ".sol", ".gd", ".zig"}
-# Languages analysed with lizard (Python keeps its richer AST/Radon analysis).
-POLYGLOT_EXTS = CODE_EXTS - {".py"}
-TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec|e2e|src/test)(/|$)|(^|/)test_[^/]+\.py$|_test\.(py|go)$|"
-                       r"\.(test|spec)\.[jt]sx?$|(Test|Tests|Spec)\.(java|kt|cs|scala|swift)$|_spec\.rb$")
+CODE_EXTS = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".go", ".java", ".kt", ".cs", ".rb", ".php",
+             ".rs", ".scala", ".swift"}
+TEST_PATH = _TEST_PATH
 
 
 def is_test_path(rel: str) -> bool:
-    return bool(TEST_PATH.search(rel))
-
-
-@dataclass
-class PolyFunction:
-    name: str
-    qualname: str
-    file: str
-    line: int
-    end_line: int
-    complexity: int
-    params: int
-    language: str
-
-
-def analyse_polyglot(ws: RepoWorkspace, max_files: int = 1500) -> tuple[list[PolyFunction], dict[str, int]]:
-    """Cyclomatic complexity + function inventory for non-Python languages (lizard, ~20 languages)."""
-    try:
-        import lizard
-    except ImportError:
-        return [], {}
-    out: list[PolyFunction] = []
-    sloc: dict[str, int] = defaultdict(int)
-    for n, path in enumerate(ws.iter_files(POLYGLOT_EXTS, max_bytes=400_000)):
-        if n >= max_files:
-            break
-        rel = ws.rel(path)
-        if is_test_path(rel) or rel.endswith((".min.js", ".d.ts")):
-            continue
-        try:
-            info = lizard.analyze_file.analyze_source_code(rel, ws.read_text(path))
-        except Exception:  # noqa: BLE001, S112 - lizard raises on exotic syntax; skip the file
-            continue
-        lang = path.suffix.lstrip(".")
-        sloc[lang] += info.nloc
-        for fn in info.function_list:
-            out.append(PolyFunction(fn.name.split("::")[-1].split(".")[-1], fn.name[:200], rel, fn.start_line,
-                                    fn.end_line, fn.cyclomatic_complexity, len(fn.parameters), lang))
-    return out, dict(sloc)
+    return _is_test_path(rel)
 
 
 def ruff_binary() -> str | None:
@@ -167,7 +130,36 @@ def _complexity_map(source: str) -> dict[tuple[str, int], int]:
     return out
 
 
+_MODULE_CACHE: dict[tuple[str, int, float], ModuleMetrics] = {}
+_CACHE_LOCK = threading.Lock()
+
+
 def analyse_python_module(ws: RepoWorkspace, path: Path) -> ModuleMetrics:
+    """AST + Radon metrics for one module.
+
+    Memoised on (path, size, mtime): the Unit Test and Code Health agents analyse the same checkout concurrently
+    and Radon's maintainability pass is the single most expensive static step in a scan.
+    """
+    try:
+        stat = path.stat()
+        key: tuple[str, int, float] | None = (str(path), stat.st_size, stat.st_mtime)
+    except OSError:
+        key = None
+    if key is not None:
+        with _CACHE_LOCK:
+            hit = _MODULE_CACHE.get(key)
+        if hit is not None:
+            return hit
+    metrics = _analyse_python_module(ws, path)
+    if key is not None:
+        with _CACHE_LOCK:
+            if len(_MODULE_CACHE) > 5000:
+                _MODULE_CACHE.clear()
+            _MODULE_CACHE[key] = metrics
+    return metrics
+
+
+def _analyse_python_module(ws: RepoWorkspace, path: Path) -> ModuleMetrics:
     rel = ws.rel(path)
     source = ws.read_text(path)
     lines = source.splitlines()
@@ -226,6 +218,32 @@ def module_name_for(rel: str) -> str:
     return ".".join(parts)
 
 
+JS_EXTS = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+
+
+@dataclass
+class DeadImport:
+    file: str
+    line: int
+    names: list[str]
+    text: str
+
+
+def find_dead_js_imports(ws: RepoWorkspace, path: Path) -> list[DeadImport]:
+    """Unused scalar require bindings safe to replace with the same require call.
+
+    This deliberately excludes ESM and destructuring: removing those bindings may
+    change link-time validation, getters, or iterator effects.
+    """
+    return [DeadImport(ws.rel(path), edit.line, [edit.name], edit.original.strip())
+            for edit in unused_require_edits(ws.read_text(path))]
+
+
+def strip_lines(text: str, line_numbers: set[int]) -> str:
+    kept = [ln for i, ln in enumerate(text.splitlines(keepends=True), start=1) if i not in line_numbers]
+    return "".join(kept)
+
+
 @dataclass
 class DuplicateBlock:
     hash: str
@@ -234,6 +252,13 @@ class DuplicateBlock:
 
 
 def find_duplicates(ws: RepoWorkspace, window: int = 8, max_files: int = 600) -> list[DuplicateBlock]:
+    """Rolling-window clone detection.
+
+    Windows advance by `window // 2` rather than 1: a clone of `window` lines is still caught by at least one
+    aligned window in both copies, but the number of hashes (and the peak memory of the index) drops ~4×, which
+    is the difference between seconds and minutes on a large repository.
+    """
+    stride = max(1, window // 2)
     index: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for count, path in enumerate(ws.iter_files(CODE_EXTS, max_bytes=300_000)):
         if count >= max_files:
@@ -245,13 +270,15 @@ def find_duplicates(ws: RepoWorkspace, window: int = 8, max_files: int = 600) ->
         norm = [(i + 1, re.sub(r"\s+", " ", ln.strip())) for i, ln in enumerate(raw)]
         norm = [(i, ln) for i, ln in norm if ln and not ln.startswith(("#", "//", "import ", "from ", "}", "*"))
                 and len(ln) > 3]
-        for k in range(0, max(0, len(norm) - window + 1)):
+        for k in range(0, max(0, len(norm) - window + 1), stride):
             chunk = "\n".join(ln for _, ln in norm[k:k + window])
             h = hashlib.sha1(chunk.encode(), usedforsecurity=False).hexdigest()
             index[h].append((rel, norm[k][0]))
     blocks: list[DuplicateBlock] = []
     claimed: set[tuple[str, int]] = set()
     for h, occ in index.items():
+        if len(occ) < 2:
+            continue
         distinct: list[tuple[str, int]] = []
         for f, line in occ:
             if any(f == cf and abs(line - cl) < window for cf, cl in distinct):
@@ -334,7 +361,7 @@ def discover_python_routes(ws: RepoWorkspace, path: Path) -> tuple[list[Route], 
     return routes, apps
 
 
-_EXPRESS = re.compile(r"\b(app|router|server|fastify|api|routes|r)\.(get|post|put|patch|delete)\(\s*['\"`]([^'\"`]+)['\"`]")
+_EXPRESS = re.compile(r"\b(app|router)\.(get|post|put|patch|delete)\(\s*['\"`]([^'\"`]+)['\"`]")
 
 
 def discover_js_routes(ws: RepoWorkspace, path: Path) -> list[Route]:
@@ -347,57 +374,8 @@ def discover_js_routes(ws: RepoWorkspace, path: Path) -> list[Route]:
     return out
 
 
-_AUTH_HINT = re.compile(r"(?i)(auth|jwt|login_required|PreAuthorize|Secured|Authorize|isLoggedIn|requireUser|"
-                        r"middleware\(['\"]auth|before_action :authenticate)")
-# (framework, file extensions, route regex with groups (method, path) or (path, method), method group index)
-_POLY_ROUTES: list[tuple[str, tuple[str, ...], re.Pattern[str], int]] = [
-    ("nestjs", (".ts", ".js"), re.compile(r"@(Get|Post|Put|Patch|Delete)\(\s*['\"`]?([^'\"`)]*)['\"`]?\s*\)"), 1),
-    ("spring", (".java", ".kt"), re.compile(r"@(Get|Post|Put|Patch|Delete)Mapping\(\s*(?:value\s*=\s*|path\s*=\s*)?"
-                                            r"\{?\s*\"([^\"]*)\""), 1),
-    ("go-http", (".go",), re.compile(r"\.(GET|POST|PUT|PATCH|DELETE|Get|Post|Put|Patch|Delete)\(\s*\"(/[^\"]*)\""), 1),
-    ("go-http", (".go",), re.compile(r"\b(?:http\.|mux\.|r\.|router\.)?HandleFunc\(\s*\"((?:GET|POST|PUT|PATCH|DELETE) )?"
-                                     r"(/[^\"]*)\""), 1),
-    ("rails", (".rb",), re.compile(r"^\s*(get|post|put|patch|delete)\s+['\"](/?[^'\"]+)['\"]"), 1),
-    ("laravel", (".php",), re.compile(r"Route::(get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]"), 1),
-    ("aspnet", (".cs",), re.compile(r"\[Http(Get|Post|Put|Patch|Delete)\(\s*\"([^\"]*)\"\s*\)\]"), 1),
-    ("aspnet", (".cs",), re.compile(r"\.Map(Get|Post|Put|Patch|Delete)\(\s*\"([^\"]+)\""), 1),
-    ("django", (".py",), re.compile(r"\b(?:re_)?path\(\s*r?['\"]([^'\"]*)['\"]\s*,\s*([\w.]+)"), 0),
-]
-_PREFIX = {
-    "nestjs": re.compile(r"@Controller\(\s*['\"`]([^'\"`]*)['\"`]"),
-    "spring": re.compile(r"@RequestMapping\(\s*(?:value\s*=\s*|path\s*=\s*)?\{?\s*\"([^\"]*)\""),
-    "aspnet": re.compile(r"\[Route\(\s*\"([^\"]*)\"\s*\)\]"),
-}
-
-
-def discover_polyglot_routes(ws: RepoWorkspace) -> list[Route]:
-    """HTTP routes for NestJS, Spring, Go (net/http, gin, echo, chi), Rails/Sinatra, Laravel, ASP.NET and Django."""
-    exts = {e for _, es, _, _ in _POLY_ROUTES for e in es}
-    out: list[Route] = []
-    for path in ws.iter_files(exts, max_bytes=400_000):
-        rel = ws.rel(path)
-        if is_test_path(rel):
-            continue
-        text = ws.read_text(path)
-        for fw, fexts, pattern, method_group in _POLY_ROUTES:
-            if not rel.endswith(fexts) or (fw == "django" and not rel.endswith("urls.py")):
-                continue
-            prefix = ""
-            if fw in _PREFIX and (pm := _PREFIX[fw].search(text)):
-                prefix = "/" + pm.group(1).strip("/").replace("[controller]", Path(rel).stem.replace("Controller", "")
-                                                                .lower())
-            for i, line in enumerate(text.splitlines(), 1):
-                m = pattern.search(line)
-                if not m:
-                    continue
-                if fw == "django":
-                    method, route_path, handler = "GET", "/" + m.group(1).lstrip("^").rstrip("$"), m.group(2)
-                elif fw == "go-http" and "HandleFunc" in line:
-                    method, route_path, handler = (m.group(1) or "GET ").strip(), m.group(2), ""
-                else:
-                    method, route_path, handler = m.group(method_group).upper(), m.group(2), ""
-                full = (prefix.rstrip("/") + "/" + route_path.lstrip("/")) if prefix else route_path
-                window = "\n".join(text.splitlines()[max(0, i - 4):i + 1])
-                out.append(Route(fw, method, full if full.startswith("/") else "/" + full, rel, i, handler, "",
-                                 bool(_AUTH_HINT.search(window))))
-    return out
+def discover_any_routes(ws: RepoWorkspace, path: Path) -> list[Route]:
+    """Routes for every non-Flask/FastAPI stack (Go, Spring, Rails, Laravel, ASP.NET, NestJS, Django, …)."""
+    return [Route(framework=r["framework"], method=r["method"], path=r["path"], file=r["file"], line=r["line"],
+                  handler=r["handler"], app_var=r["app_var"], requires_auth=r["requires_auth"])
+            for r in discover_routes_textual(ws, path)]

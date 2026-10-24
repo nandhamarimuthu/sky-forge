@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import UTC
 
 import httpx
 
@@ -30,16 +29,8 @@ def _wait_proposal(client, finding_id: str, proposal_id: str, timeout: float = 6
     raise AssertionError("remediation did not finish")
 
 
-def _check_pull_request(client, fid: str, pid: str, project_id: str, monkeypatch, tmp_path) -> None:
-    from app.db.session import session_scope
-    from app.models import Project, RemediationProposal
+def _check_pull_request(client, fid: str, pid: str, monkeypatch) -> None:
     from app.services import publish
-    from app.services.container import get_container
-
-    settings = get_container().settings
-    monkeypatch.setattr(settings, "github_app_id", None)
-    monkeypatch.setattr(settings, "github_app_installation_id", None)
-    monkeypatch.setattr(settings, "github_app_private_key_path", None)
 
     token = "ghp_" + "x" * 36
     url = f"/api/v1/findings/{fid}/pull-request"
@@ -68,13 +59,6 @@ def _check_pull_request(client, fid: str, pid: str, project_id: str, monkeypatch
             assert token not in body["body"]
             return httpx.Response(201, json={"html_url": "https://github.com/octo/skyforge-demo-shop/pull/1",
                                              "number": 1, "draft": True})
-        if path == "/repos/octo/app-repo" and req.method == "GET":
-            return httpx.Response(200, json={"default_branch": "main", "permissions": {"push": True}})
-        if path == "/repos/octo/app-repo/pulls" and req.method == "POST":
-            body = json.loads(req.content)
-            assert body["draft"] is True and body["head"].startswith("skyforge/fix-")
-            return httpx.Response(201, json={"html_url": "https://github.com/octo/app-repo/pull/2",
-                                             "number": 2, "draft": True})
         return httpx.Response(500, json={"message": f"unexpected {req.method} {path}"})
 
     real_init = publish._GitHub.__init__
@@ -103,72 +87,52 @@ def _check_pull_request(client, fid: str, pid: str, project_id: str, monkeypatch
     detail = client.get(f"/api/v1/findings/{fid}", headers=VIEWER).json()
     assert detail["proposals"][0]["verification"]["pull_request"]["number"] == 1
 
-    # An App installation token uses the installed repository directly; it never needs /user or /installation.
-    settings = get_container().settings
-    key_path = tmp_path / "dummy-app.pem"
-    key_path.write_text("test-only; token exchange is mocked")
-    monkeypatch.setattr(settings, "github_app_id", "123456")
-    monkeypatch.setattr(settings, "github_app_installation_id", "789012")
-    monkeypatch.setattr(settings, "github_app_private_key_path", key_path)
-    app_token = "ghs-installation-token"
-    monkeypatch.setattr(publish, "_installation_token", lambda *_args: app_token)
-    token = app_token
-    with session_scope() as db:
-        project = db.get(Project, project_id)
-        project.repository.provider = "github"
-        project.repository.owner = "octo"
-        project.repository.name = "app-repo"
-        project.repository.url = "https://github.com/octo/app-repo"
-        proposal = db.get(RemediationProposal, pid)
-        proposal.verification = {k: v for k, v in proposal.verification.items() if k != "pull_request"}
-    app_pr = client.post(url, headers=ENGINEER, json={"proposal_id": pid})
-    assert app_pr.status_code == 200, app_pr.text
-    assert app_pr.json()["url"] == "https://github.com/octo/app-repo/pull/2"
-    assert app_pr.json()["mode"] == "direct"
-    with session_scope() as db:
-        project = db.get(Project, project_id)
-        project.repository.provider = "local-fixture"
-        project.repository.owner = "fixtures"
-        project.repository.name = "demo-shop"
-        project.repository.url = "fixture:demo-shop"
+
+def _wait_pull_request(client, finding_id: str, proposal_id: str, timeout: float = 60) -> dict:
+    deadline = time.time() + timeout
+    last: dict = {}
+    while time.time() < deadline:
+        d = client.get(f"/api/v1/findings/{finding_id}", headers=ADMIN).json()
+        last = next(x for x in d["proposals"] if x["id"] == proposal_id)
+        v = last["verification"] or {}
+        if v.get("pull_request") or v.get("pull_request_error"):
+            return last
+        time.sleep(0.3)
+    raise AssertionError(f"one-click fix did not open a pull request: {last}")
+
+
+def _check_one_click_fix(client, project_id: str, skip_finding: str) -> None:
+    """The Fix button: one POST approves, applies on an isolated branch, verifies and opens the draft PR."""
+    page = client.get(f"/api/v1/findings?project_id={project_id}&page_size=100", headers=VIEWER).json()
+    target = None
+    for item in page["items"]:
+        if item["id"] == skip_finding or not item["has_proposal"]:
+            continue
+        detail = client.get(f"/api/v1/findings/{item['id']}", headers=VIEWER).json()
+        prop = next((p for p in detail["proposals"] if p["status"] == "validated"), None)
+        if prop:
+            target = (item["id"], prop["id"])
+            break
+    assert target, "expected another finding with a validated proposal"
+    fid, pid = target
+    url = f"/api/v1/findings/{fid}/fix"
+    assert client.post(url, headers=VIEWER, json={"proposal_id": pid}).status_code == 403
+    assert client.post(url, headers=ENGINEER, json={"proposal_id": "prop_missing"}).status_code == 404
+
+    r = client.post(url, headers=ENGINEER, json={"proposal_id": pid, "comment": "one-click"})
+    assert r.status_code == 202, r.text
+    final = _wait_pull_request(client, fid, pid)
+    assert final["status"] in ("verified", "applied"), final
+    pr = final["verification"]["pull_request"]
+    assert pr["number"] == 1 and pr["branch"].startswith("skyforge/fix-")
+    detail = client.get(f"/api/v1/findings/{fid}", headers=VIEWER).json()
+    assert [a["decision"] for a in detail["approvals"]] == ["approve"]
+    assert detail["approvals"][0]["comment"] == "one-click"
 
 
 def test_health_is_public(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200 and r.json()["database"] is True
-
-
-def test_github_app_installation_token_exchange_and_cache(tmp_path, monkeypatch):
-    from datetime import datetime, timedelta
-
-    import jwt
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-
-    from app.services import publish
-
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-                            serialization.NoEncryption()).decode()
-    path = tmp_path / "app.pem"
-    path.write_text(pem)
-    publish._APP_TOKEN = None
-    requests = []
-
-    def exchange(url, headers, timeout):
-        claims = jwt.decode(headers["Authorization"].removeprefix("Bearer "), key.public_key(), algorithms=["RS256"],
-                            options={"verify_exp": False})
-        assert claims["iss"] == "123456"
-        assert url.endswith("/app/installations/789/access_tokens")
-        requests.append(url)
-        return httpx.Response(201, json={"token": "ghs-installation-token",
-                                         "expires_at": (datetime.now(UTC) + timedelta(hours=1))
-                                         .isoformat().replace("+00:00", "Z")})
-
-    monkeypatch.setattr(publish.httpx, "post", exchange)
-    assert publish._installation_token("https://api.github.com", "123456", "789", path) == "ghs-installation-token"
-    assert publish._installation_token("https://api.github.com", "123456", "789", path) == "ghs-installation-token"
-    assert len(requests) == 1
 
 
 def test_auth_required_and_errors_are_structured(client):
@@ -190,7 +154,7 @@ def test_input_validation(client):
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_repository"
 
 
-def test_end_to_end_scan_review_and_remediation(client, monkeypatch, tmp_path):
+def test_end_to_end_scan_review_and_remediation(client, monkeypatch):
     r = client.post("/api/v1/projects", headers=ENGINEER,
                     json={"name": "Demo Shop", "repo_url": "fixture:demo-shop"})
     assert r.status_code == 201, r.text
@@ -246,7 +210,8 @@ def test_end_to_end_scan_review_and_remediation(client, monkeypatch, tmp_path):
     assert detail["status"] == "verified"
     assert [a["decision"] for a in detail["approvals"]] == ["approve"]
 
-    _check_pull_request(client, fid, prop["id"], pid, monkeypatch, tmp_path)
+    _check_pull_request(client, fid, prop["id"], monkeypatch)
+    _check_one_click_fix(client, pid, fid)
 
     # Dismiss another finding
     other = page["items"][0]["id"]
@@ -259,15 +224,15 @@ def test_end_to_end_scan_review_and_remediation(client, monkeypatch, tmp_path):
     assert dl.status_code == 200 and dl.headers["x-content-type-options"] == "nosniff"
 
     cost = client.get(f"/api/v1/projects/{pid}/aws/cost", headers=VIEWER).json()
-    assert cost["mode"] == "dump" and cost["simulated"] is True
-    assert cost["source"]["dump"] == "terraform" and cost["daily_total"] and cost["estimated_monthly_savings"] > 0
+    assert cost["mode"] == "dump" and cost["simulated"] is True and cost["measured_spend"] is False
+    assert cost["source"]["source"] == "terraform" and cost["daily_total"] and cost["estimated_monthly_savings"] > 0
     res = client.get(f"/api/v1/projects/{pid}/aws/resources", headers=VIEWER).json()
     assert res["items"] and any(i["iac_address"] == "aws_instance.api" for i in res["items"])
     quality = client.get(f"/api/v1/projects/{pid}/quality", headers=VIEWER).json()
     assert quality["metrics"]["max_complexity"] >= 15
 
     dash = client.get("/api/v1/dashboard/summary", headers=VIEWER).json()
-    assert dash["projects"] >= 1 and dash["open_total"] > 0 and dash["spend_simulated"] is True and dash["spend_30d"] > 100
+    assert dash["projects"] >= 1 and dash["open_total"] > 0 and dash["spend_simulated"] is True and dash["spend_30d"] > 0
 
     agents = client.get("/api/v1/agents", headers=VIEWER).json()
     assert len(agents) == 6
@@ -297,6 +262,33 @@ def test_settings_update_admin_only(client):
     assert r.json()["scan_policy"]["execute_tests"] is False
 
 
+def test_llm_provider_toggle(client):
+    r = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "openai", "openai_model": "gpt-4o-mini"})
+    assert r.status_code == 200
+    llm = r.json()["llm"]
+    assert llm["provider"] == "openai" and llm["model"] == "gpt-4o-mini"
+    assert llm["base_url"] == "https://api.openai.com/v1"
+    assert "openai" in llm["providers"] and "ollama" in llm["providers"]
+    back = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "ollama"}).json()["llm"]
+    assert back["provider"] == "ollama" and back["model"] == "gemma3:4b"
+    assert client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "anthropic"}).status_code == 422
+
+
+def test_openai_api_key_is_stored_but_never_returned(client):
+    key = "sk-test" + "a" * 40
+    r = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "openai", "openai_api_key": key})
+    assert r.status_code == 200
+    llm = r.json()["llm"]
+    assert llm["api_key_configured"] is True and llm["api_key_source"] == "settings"
+    assert key not in r.text and llm["api_key_hint"].endswith(key[-4:])
+    assert client.put("/api/v1/settings", headers=ADMIN, json={"openai_api_key": "short"}).status_code == 422
+    audit_text = client.get("/api/v1/audit", headers=ADMIN).text
+    assert key not in audit_text
+    cleared = client.put("/api/v1/settings", headers=ADMIN, json={"openai_api_key": ""}).json()["llm"]
+    assert cleared["api_key_configured"] is False and cleared["api_key_hint"] is None
+    client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "ollama"})
+
+
 def test_reset_clears_all_data_admin_only(client, settings):
     client.post("/api/v1/projects", headers=ADMIN, json={"name": "Reset me", "repo_url": "fixture:orders-api"})
     (settings.workspaces_dir / "leftover").mkdir(parents=True, exist_ok=True)
@@ -311,3 +303,29 @@ def test_reset_clears_all_data_admin_only(client, settings):
     assert not (settings.workspaces_dir / "leftover").exists()
     # Only the reset itself remains in the audit trail.
     assert [e["action"] for e in client.get("/api/v1/audit", headers=ADMIN).json()["items"]] == ["platform.reset"]
+
+
+def test_github_app_installation_token(settings, monkeypatch):
+    """App auth mints and caches an installation token and derives push rights from installation grants."""
+    from app.services import github_app
+
+    github_app.reset_cache()
+    monkeypatch.setattr(settings, "github_app_id", "5451298")
+    monkeypatch.setattr(settings, "github_app_installation_id", "174709599")
+    monkeypatch.setattr(github_app, "app_jwt", lambda s: "signed.jwt")
+    calls: list[str] = []
+
+    def fake_call(s, method, path, bearer, ok):
+        calls.append(f"{method} {path}")
+        assert bearer == "signed.jwt"
+        if path.endswith("/access_tokens"):
+            return {"token": "ghs_" + "y" * 36, "expires_at": "2099-01-01T00:00:00Z"}
+        return {"account": {"login": "octo"}, "permissions": {"contents": "write", "pull_requests": "write"}}
+
+    monkeypatch.setattr(github_app, "_call", fake_call)
+    token, login = github_app.installation_auth(settings)
+    assert token.startswith("ghs_") and login == "octo"
+    assert github_app.can_push(settings) is True
+    github_app.installation_auth(settings)
+    assert len(calls) == 2  # second resolution served from cache
+    github_app.reset_cache()

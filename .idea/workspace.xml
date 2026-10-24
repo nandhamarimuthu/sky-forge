@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="ebd7ad3c-315d-459d-9f53-9eaa6d0dd77b" name="Changes" comment="" />
+    <list default="true" id="ebd7ad3c-315d-459d-9f53-9eaa6d0dd77b" name="Changes" comment="Added PR for code coverage agent">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -15,6 +20,69 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.7992617520146208" />
+      <entry key="MS500" value="3.2415800289913257" />
+      <entry key="S2" value="4.385720688557168" />
+      <entry key="S5" value="4.7351218827569355" />
+      <entry key="S10" value="4.864116968020005" />
+      <entry key="S30" value="4.953915598200632" />
+      <entry key="S60" value="4.976857454087144" />
+      <entry key="M2" value="4.988403520089835" />
+      <entry key="M5" value="4.995355342848889" />
+      <entry key="M10" value="4.997676659263893" />
+      <entry key="M15" value="4.998450881155257" />
+      <entry key="M30" value="4.999225328043256" />
+      <entry key="H1" value="4.999612635883526" />
+      <entry key="H2" value="4.999806310906674" />
+      <entry key="H4" value="4.999903153694494" />
+      <entry key="D1" value="4.999983858704793" />
+      <entry key="W1" value="4.999997694094702" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.7461492945641648" />
+      <entry key="MS500" value="3.2189829735268436" />
+      <entry key="S2" value="4.377666870472345" />
+      <entry key="S5" value="4.731604116659277" />
+      <entry key="S10" value="4.862303275530158" />
+      <entry key="S30" value="4.953298303116765" />
+      <entry key="S60" value="4.976547179481681" />
+      <entry key="M2" value="4.988247973295279" />
+      <entry key="M5" value="4.995293025502044" />
+      <entry key="M10" value="4.997645484122965" />
+      <entry key="M15" value="4.998430094066349" />
+      <entry key="M30" value="4.999214932667447" />
+      <entry key="H1" value="4.999607437737682" />
+      <entry key="H2" value="4.999803711719254" />
+      <entry key="H4" value="4.999901854072158" />
+      <entry key="D1" value="4.999983642097094" />
+      <entry key="W1" value="4.999997663150648" />
+    </decayedShown>
+  </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6,
   &quot;fromUser&quot;: false
@@ -24,18 +92,19 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
-    &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "ai.playground.ignore.import.keys.banner.in.settings": "true",
+    "git-widget-placeholder": "main",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
@@ -58,6 +127,29 @@
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="master" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>

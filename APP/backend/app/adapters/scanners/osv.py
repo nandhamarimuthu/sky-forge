@@ -94,6 +94,57 @@ class OSVClient:
         with self._lock:
             if key in self._cache:
                 return self._cache[key]
+        vulns = self._fetch(name, ecosystem, version)
+        advisories = self._dedupe([self._parse(v, name, ecosystem, version) for v in vulns])
+        with self._lock:
+            self._cache[key] = advisories
+        return advisories
+
+    def query_many(self, packages: list[tuple[str, str, str]]) -> dict[tuple[str, str, str], list[Advisory]]:
+        """Resolve many (name, ecosystem, version) tuples with OSV's batch endpoint.
+
+        `/v1/querybatch` answers hundreds of packages in one round trip but only returns advisory *ids*, so the
+        (usually small) set of affected packages is then hydrated through the regular endpoint. On any batch
+        failure we fall back to per-package queries, so correctness never depends on the optimisation.
+        """
+        out: dict[tuple[str, str, str], list[Advisory]] = {}
+        pending: list[tuple[str, str, str]] = []
+        for name, ecosystem, version in packages:
+            key = (ecosystem, name.lower(), version)
+            with self._lock:
+                cached = self._cache.get(key)
+            if cached is not None:
+                out[(name, ecosystem, version)] = cached
+            else:
+                pending.append((name, ecosystem, version))
+        if not pending:
+            return out
+
+        for chunk_start in range(0, len(pending), 200):
+            chunk = pending[chunk_start:chunk_start + 200]
+            queries = [{"package": {"name": n, "ecosystem": e}, "version": v} for n, e, v in chunk]
+            try:
+                with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
+                    resp = client.post(f"{self.base_url}/v1/querybatch", json={"queries": queries})
+                    resp.raise_for_status()
+                    results = resp.json().get("results", []) or []
+            except (httpx.HTTPError, ValueError):
+                results = []
+            if len(results) != len(chunk):
+                for n, e, v in chunk:  # batch unavailable — fall back, preserving existing behaviour
+                    out[(n, e, v)] = self.query(n, e, v)
+                continue
+            for (n, e, v), res in zip(chunk, results, strict=True):
+                if not (res or {}).get("vulns"):
+                    advisories: list[Advisory] = []
+                    with self._lock:
+                        self._cache[(e, n.lower(), v)] = advisories
+                    out[(n, e, v)] = advisories
+                else:
+                    out[(n, e, v)] = self.query(n, e, v)
+        return out
+
+    def _fetch(self, name: str, ecosystem: str, version: str) -> list[dict[str, Any]]:
         payload = {"package": {"name": name, "ecosystem": ecosystem}, "version": version}
         vulns: list[dict[str, Any]] = []
         with httpx.Client(timeout=self.timeout, follow_redirects=False) as client:
@@ -107,10 +158,7 @@ class OSVClient:
                 page_token = data.get("next_page_token")
                 if not page_token:
                     break
-        advisories = self._dedupe([self._parse(v, name, ecosystem, version) for v in vulns])
-        with self._lock:
-            self._cache[key] = advisories
-        return advisories
+        return vulns
 
     @staticmethod
     def _dedupe(items: list[Advisory]) -> list[Advisory]:

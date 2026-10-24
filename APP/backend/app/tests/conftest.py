@@ -16,6 +16,9 @@ os.environ.update({
     "LLM_ENABLED": "false",
     "OSV_API_URL": "http://osv.invalid",
     "RATE_LIMIT_PER_MINUTE": "5000",
+    # Keep tests hermetic: ignore any GitHub App configured in the developer's .env.
+    "GITHUB_APP_ID": "",
+    "GITHUB_APP_INSTALLATION_ID": "",
 })
 
 import pytest  # noqa: E402

@@ -39,8 +39,8 @@ export function OverviewPage() {
           <section className="kpis">
             <Kpi label="Projects monitored" value={data.projects} c="var(--cobalt)" bg="var(--cobalt-t)"
               sub={<><b>{data.recent_scans.filter((s: Scan) => ["queued", "running"].includes(s.status)).length}</b> scans running</>} />
-            <Kpi label="Vulnerabilities" value={data.vulnerabilities} c="var(--tomato)" bg="var(--tomato-t)"
-              sub={<><b>{data.vulnerabilities_critical_high}</b> critical / high · {data.open_total} open findings in total</>} />
+            <Kpi label="Vulnerabilities" value={data.vulnerabilities ?? 0} c="var(--tomato)" bg="var(--tomato-t)"
+              sub={<><b>{data.critical_high}</b> Vulnerabilities · <b>{data.open_total}</b> open findings</>} />
             <Kpi label="Unit coverage" value={data.coverage_avg != null ? `${data.coverage_avg}%` : "—"} c="var(--orchid)" bg="var(--orchid-t)"
               sub={passRate != null ? <><b>{tests.passed}/{tests.total}</b> tests passing ({passRate}%)</> : "No measured test runs yet"} />
             <Kpi label="AWS spend · 30d" value={money(data.spend_30d)} c="var(--teal)" bg="var(--teal-t)"

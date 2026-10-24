@@ -1,10 +1,7 @@
-import { useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { api, ApiError } from "../api/client";
 import { useAwsCost, useAwsResources } from "../api/hooks";
-import { Empty, ErrorState, Icon, Kpi, Loading, Sev, SimBanner, Status } from "../components/common";
-import { useToast } from "../components/Toast";
+import { Empty, ErrorState, Kpi, Loading, Sev, SimBanner, Status } from "../components/common";
 import { useFindingDrawer } from "../components/FindingDrawer";
 import { PageHead, useSelectedProject } from "../components/PageHead";
 import { ProjectPicker } from "../components/ProjectPicker";
@@ -13,47 +10,20 @@ import { money } from "../features/agents";
 const COLORS = ["#9157FF", "#FF5A5A", "#0EB5A8", "#4361EE", "#FFAE1A", "#F2479A", "#16C47F", "#7D7A99"];
 const shortDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-interface DumpInfo { name: string; account_id: string; region: string; period_start: string; period_end: string; description: string }
+interface TerraformSource { region?: string; period_start?: string; period_end?: string; description?: string }
 
-function DataSource({ projectId, source, mode, errors }: { projectId: string; source: any; mode: string; errors: string[] }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const { data: dumps } = useQuery({ queryKey: ["aws-dumps"], queryFn: () => api<DumpInfo[]>("/aws/dumps") });
-  const refresh = () => ['aws-cost', 'aws-res'].forEach((k) => qc.invalidateQueries({ queryKey: [k, projectId] }));
-  const fail = (e: unknown) => toast(e instanceof ApiError ? e.message : "Request failed", "var(--tomato)");
-  const select = async (name: string) => {
-    setBusy(true);
-    try { await api(`/projects/${projectId}/aws/source`, { method: "PUT", json: { dump: name } }); toast(`Using data dump ${name} — re-scan to refresh findings`, "var(--teal)"); refresh(); }
-    catch (e) { fail(e); } finally { setBusy(false); }
-  };
-  const upload = async (file: File) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    setBusy(true);
-    try { await api(`/projects/${projectId}/aws/dump`, { method: "POST", body: fd }); toast("Data dump uploaded — re-scan to analyse it", "var(--teal)"); refresh(); }
-    catch (e) { fail(e); } finally { setBusy(false); if (fileRef.current) fileRef.current.value = ""; }
-  };
-  if (mode !== "dump") return null;
+function DataSource({ source, errors }: { source?: TerraformSource; errors: string[] }) {
   return (
     <div className="card" style={{ padding: 18 }}>
       <div className="row wrap" style={{ gap: 14 }}>
         <div style={{ flex: 1, minWidth: 260 }}>
-          <div className="kpi-label">Data source · {source?.dump === "terraform" ? "simulated from Terraform" : "AWS export"}</div>
+          <div className="kpi-label">Data source · Repository Terraform only</div>
           <div style={{ fontWeight: 700, marginTop: 4 }}>
-            {source?.dump ?? "—"} · account <span className="mono">{source?.account_id ?? "?"}</span> · {source?.region ?? "?"} · {source?.period_start} → {source?.period_end}
+            Generated from this repository · {source?.region ?? "?"} · {source?.period_start} → {source?.period_end}
           </div>
-          <div className="muted" style={{ fontSize: ".8rem" }}>{source?.description} {source?.exported_at ? `Exported ${new Date(source.exported_at).toLocaleString()}.` : ""}</div>
+          <div className="muted" style={{ fontSize: ".8rem" }}>{source?.description} Bundled and uploaded dumps are never used. Re-scan after Terraform changes to refresh recommendations.</div>
           {errors.length > 0 && <div className="error-box" style={{ marginTop: 8 }}>{errors.join("; ")}</div>}
         </div>
-        <select className="select input" style={{ width: 220 }} disabled={busy} value="" onChange={(e) => e.target.value && select(e.target.value)} aria-label="Switch data dump">
-          <option value="">Switch data source…</option>
-          <option value="terraform">Simulate from repo Terraform</option>
-          {(dumps ?? []).map((d) => <option key={d.name} value={d.name}>Bundled dump: {d.name} ({d.region})</option>)}
-        </select>
-        <input ref={fileRef} type="file" accept=".zip" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => fileRef.current?.click()}><Icon name="download" /> Upload export (.zip)</button>
       </div>
     </div>
   );
@@ -83,7 +53,7 @@ export function AwsPage() {
       {!project ? <div className="card"><Empty title="Select a project" /></div> : cost.error ? <ErrorState error={cost.error} /> : !c ? <Loading rows={4} height={80} /> : (
         <>
           <SimBanner show={c.simulated} />
-          <DataSource projectId={project} source={c.source} mode={c.mode} errors={c.errors ?? []} />
+          <DataSource source={c.source} errors={c.errors ?? []} />
           {c.missing_evidence?.length > 0 && <div className="banner info"><b>Missing evidence:</b> {c.missing_evidence.join("; ")}</div>}
           <section className="kpis">
             <Kpi label={c.measured_spend ? "Measured spend · 30d" : "Spend · 30d"} value={money(c.last_30_days)} c="var(--cobalt)" bg="var(--cobalt-t)"

@@ -23,12 +23,12 @@ import httpx
 from pydantic import ValidationError
 from sqlalchemy import select
 
-from app.adapters.aws.factory import build_aws_adapter, synthesize_for_scan
+from app.adapters.aws.factory import build_aws_adapter
 from app.adapters.repository.git_repo import RepositoryError, RepoWorkspace, materialize, parse_repo_url
 from app.adapters.sandbox import DockerSandbox
 from app.adapters.scanners.manifests import upgrade_patch
 from app.adapters.scanners.osv import OSVClient
-from app.adapters.scanners.terraform import TfResource, parse_terraform
+from app.adapters.scanners.terraform import parse_terraform
 from app.agents import AGENTS
 from app.agents.base import AgentContext, CancelledError, ToolPermissionError
 from app.agents.security_guardrails import PolicyEngine
@@ -204,35 +204,26 @@ class ScanOrchestrator:
         # 5–9. Validate, dedupe, guardrails, persist, explain
         sink.emit("scan.log", "Validating agent output and proposals through security guardrails")
         persisted = self._persist(scan_id, snapshot["id"], ws, results, sink)
+        if options.get("use_llm", True) and self.llm.enabled:
+            self._explain(persisted, sink)
         statuses = self._agent_statuses(scan_id)
-        ok = ("completed", "skipped")
-        if all(s in ok for s in statuses.values()):
+        if all(s == "completed" for s in statuses.values()):
             final = "completed"
         elif any(s == "completed" for s in statuses.values()):
             final = "partial"
         else:
             final = "failed"
-        # Findings are usable immediately; LLM explanations fill in afterwards so the scan isn't held up by the LLM.
-        with session_scope() as db:
-            for f in persisted:
-                row = db.get(Finding, f["id"])
-                if row is not None and not row.explanation:
-                    row.explanation, row.explanation_source = template_explanation(f), "template"
         self._finish(scan_id, final, sink)
-        if options.get("use_llm", True) and self.llm.enabled:
-            self._explain(persisted, sink)
 
     # ------------------------------------------------------------------ agents
     def _tools(self, snapshot: dict[str, Any], ws: RepoWorkspace) -> dict[str, Any]:
         settings = self.settings
 
-        def aws_factory(hints: list[dict] | None = None, tf: list[TfResource] | None = None) -> Any:
+        def aws_factory(hints: list[dict] | None = None, terraform: list[Any] | None = None) -> Any:
             with session_scope() as db:
                 proj = db.get(Project, snapshot["id"])
                 account = proj.cloud_account if proj else None
-                if tf is not None and synthesize_for_scan(settings, account, tf) == 0:
-                    return None
-                return build_aws_adapter(settings, account, hints)
+                return build_aws_adapter(settings, account, hints, terraform)
 
         return {"repo.read": ws, "osv.query": self.osv, "manifest.patch": upgrade_patch,
                 "sandbox.execute": self.sandbox, "static.ruff": True, "static.radon": True,
@@ -277,18 +268,22 @@ class ScanOrchestrator:
                     emit("agent.log", f"Transient error ({type(exc).__name__}); retrying", level="warning")
                     time.sleep(2)
 
-        pool = ThreadPoolExecutor(max_workers=min(4, len(agent_ids)), thread_name_prefix=f"agents-{scan_id[-6:]}")
+        # One worker per agent: agents are I/O-bound (Docker, OSV, git) and a smaller pool made the last agent
+        # wait for a free slot, inflating wall-clock scan time for no benefit.
+        pool = ThreadPoolExecutor(max_workers=max(1, min(8, len(agent_ids))),
+                                  thread_name_prefix=f"agents-{scan_id[-6:]}")
         futures: dict[str, Future[AgentResult]] = {a: pool.submit(execute, a) for a in agent_ids}
         deadline = time.monotonic() + self.settings.agent_timeout_s
         for agent_id, fut in futures.items():
             try:
                 res = fut.result(timeout=max(1.0, deadline - time.monotonic()))
                 results[agent_id] = res
-                status = res.status if res.status in ("completed", "failed", "skipped") else "partial"
+                status = "completed" if res.status == "completed" else ("failed" if res.status == "failed"
+                                                                         else "partial")
                 self._set_run(scan_id, agent_id, status="completed" if status == "partial" else status,
                               progress=1.0, finished_at=utcnow(), metrics=res.metrics, tools_used=res.tools_used,
                               findings_count=len(res.findings),
-                              error="; ".join(res.notes)[:1000] if status in ("partial", "skipped") else None)
+                              error="; ".join(res.notes)[:1000] if status == "partial" else None)
                 sink.emit("agent.status", f"{AGENTS[agent_id].name} {status}: {len(res.findings)} finding(s)",
                           agent_id=agent_id, progress=1.0, data={"status": status, "findings": len(res.findings),
                                                                  "notes": res.notes[:5]})
@@ -441,20 +436,27 @@ class ScanOrchestrator:
                 "evidence_summary": evidence_summary}
 
     def _explain(self, persisted: list[dict[str, Any]], sink: EventSink) -> None:
-        """Runs after the scan is marked finished; template explanations are already in place."""
-        top = sorted(persisted, key=lambda f: -SEVERITY_RANK[f["severity"]])[:20]
-        if not (self.llm.usable and top):
-            return
-        try:
-            explanations, engine = explain_with_crew(self.llm, top)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("LLM explanation failed: %s", type(exc).__name__)
-            return
+        top = sorted(persisted, key=lambda f: -SEVERITY_RANK[f["severity"]])[:30]
+        explanations: dict[str, str] = {}
+        engine = "template"
+        if self.llm.usable and top:
+            sink.emit("scan.log",
+                      f"Generating explanations with {self.llm.resolved_model()} via CrewAI/{self.llm.provider}")
+            try:
+                explanations, engine = explain_with_crew(self.llm, top)
+            except Exception as exc:  # noqa: BLE001
+                sink.emit("scan.log", f"LLM explanation failed: {type(exc).__name__}", level="warning")
+        else:
+            sink.emit("scan.log", "LLM unavailable — using deterministic explanations", level="info")
         with session_scope() as db:
-            for fid, text in explanations.items():
-                row = db.get(Finding, fid)
-                if row is not None:
-                    row.explanation, row.explanation_source = text, engine
+            for f in persisted:
+                row = db.get(Finding, f["id"])
+                if row is None:
+                    continue
+                if f["id"] in explanations:
+                    row.explanation, row.explanation_source = explanations[f["id"]], engine
+                else:
+                    row.explanation, row.explanation_source = template_explanation(f), "template"
 
     # ------------------------------------------------------------------ completion
     def _finish(self, scan_id: str, status: str, sink: EventSink, error: str | None = None) -> None:

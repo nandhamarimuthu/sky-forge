@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import ast
 import threading
 from typing import Any
 
 import pytest
 
 from app.adapters.aws.dump import DumpAwsAdapter
+from app.adapters.repository.git_repo import RepoWorkspace
 from app.adapters.sandbox import DockerSandbox
+from app.adapters.scanners.aws_mocks import MOCK_DIR, mock_files, plan_aws_mocks
+from app.adapters.scanners.code_metrics import discover_any_routes
+from app.adapters.scanners.languages import profile_repository
+from app.adapters.scanners.languages import test_path_for as idiomatic_test_path
 from app.adapters.scanners.manifests import upgrade_patch
 from app.adapters.scanners.terraform import parse_terraform
 from app.agents import AGENTS
 from app.agents.base import AgentContext, ToolPermissionError
-from app.agents.security_guardrails import PolicyEngine
+from app.agents.security_guardrails import PolicyEngine, scan_generated_code
 from app.core.config import get_settings
 from app.tests.conftest import FakeOSV
 
@@ -97,37 +103,75 @@ def test_aws_agent_on_one_month_data_dump(fixture_ws, settings):
     assert rightsize.evidence["actual_monthly_cost"] > 0 and rightsize.evidence["period_days"] == 30
 
 
-def test_aws_data_simulated_from_terraform(fixture_ws, tmp_path):
-    from app.adapters.aws.synth import synthesize_from_terraform
-
-    tf = parse_terraform(fixture_ws)
-    n = synthesize_from_terraform(tf, tmp_path / "sim", tag="demo-shop", account="123456789012",
-                                  region="eu-west-2", seed_key="p1")
-    assert n >= 2
-    adapter = DumpAwsAdapter(tmp_path / "sim", "demo-shop", [{"type": r.type, "name": r.name,
-                                                              "address": r.address} for r in tf])
-    inv = adapter.inventory()
-    assert any(r.iac_address == "aws_instance.api" for r in inv)
-    assert adapter.cost().by_service and not adapter.report.errors
-    # Deterministic per project.
-    synthesize_from_terraform(tf, tmp_path / "sim2", tag="demo-shop", account="123456789012", region="eu-west-2",
-                              seed_key="p1")
-    assert (tmp_path / "sim" / "ec2_instances.json").read_text() == (tmp_path / "sim2" / "ec2_instances.json").read_text()
-
-
-def test_aws_agent_skips_without_terraform(fixture_ws):
-    ctx, _ = make_ctx(fixture_ws, "aws_optimizer")
-    ctx.tools["aws.read"] = lambda hints=None, tf=None: None
-    res = AGENTS["aws_optimizer"].run(ctx)
-    assert res.status == "skipped" and not res.findings
-
-
 def test_unit_test_agent_without_sandbox_fails_closed(fixture_ws):
     ctx, _ = make_ctx(fixture_ws, "unit_test")
     res = AGENTS["unit_test"].run(ctx)
     assert res.test_runs and res.test_runs[0].status == "not_executed"
     assert res.metrics["sandbox_executed"] is False
     assert any(f.category == "coverage" for f in res.findings)
+
+
+def test_unit_test_agent_suggests_where_to_improve_coverage(fixture_ws):
+    ctx, _ = make_ctx(fixture_ws, "unit_test")
+    res = AGENTS["unit_test"].run(ctx)
+    module = next(f for f in res.findings if f.rule_id == "coverage:module")
+    assert "Where to improve coverage in" in module.recommendation
+    targets = module.evidence["coverage_targets"]
+    assert targets and all({"function", "line", "uncovered_lines"} <= set(t) for t in targets)
+
+    roadmap = next(f for f in res.findings if f.rule_id == "coverage:roadmap")
+    assert roadmap.severity == "info" and roadmap.target == "repository"
+    assert "Improve coverage in this order" in roadmap.recommendation
+    assert roadmap.evidence["modules"] and roadmap.evidence["modules"][0]["start_with"]
+    assert res.metrics["modules_needing_coverage"] >= 1
+
+
+def test_coverage_line_ranges_and_gap_ranking():
+    from app.adapters.scanners.code_metrics import FunctionInfo
+    from app.agents.unit_test_agent import function_gaps, line_ranges
+
+    assert line_ranges([3, 1, 2, 7, 8, 20]) == "1-3, 7-8, 20"
+    assert line_ranges([]) == ""
+    simple = FunctionInfo("a", "a", "m.py", 1, 5, 1, [], False, False, [], None, None)
+    complex_fn = FunctionInfo("b", "b", "m.py", 10, 20, 9, [], False, False, [], None, None)
+    gaps = function_gaps([simple, complex_fn], [2, 3, 11, 12, 13])
+    assert [g.function.name for g in gaps] == ["b", "a"]  # higher complexity × more lines ranks first
+    assert gaps[0].missing == [11, 12, 13]
+
+
+def test_route_handlers_are_testable_but_context_and_global_state_are_not(tmp_path):
+    import threading
+
+    from app.adapters.repository.git_repo import RepoWorkspace
+    from app.adapters.scanners.code_metrics import analyse_python_module
+    from app.agents.base import AgentContext
+    from app.agents.unit_test_agent import GENERATED_DIR, build_cases, generated_test_path, is_route_handler
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "svc.py").write_text(
+        "from flask import Flask, request\n"
+        "app = Flask(__name__)\n"
+        "store = []\n\n"
+        "@app.route('/hi')\n"
+        "def hi():\n    return 'hi'\n\n"
+        "@app.route('/n/<int:item_id>')\n"
+        "def pick(item_id):\n    return item_id * 2\n\n"
+        "@app.route('/items')\n"
+        "def listing():\n    return {'items': store}\n\n"
+        "@app.route('/add', methods=['POST'])\n"
+        "def take():\n    return request.get_json()\n\n"
+        "@app.cli.command('seed')\n"
+        "def seed():\n    return 1\n", encoding="utf-8")
+    ws = RepoWorkspace(tmp_path)
+    fns = analyse_python_module(ws, tmp_path / "svc.py").functions
+    ctx = AgentContext(scan_id="s", project={}, workspace=ws, options={}, tools={}, allowed_tools=frozenset(),
+                       emit=lambda *a, **k: None, cancel_event=threading.Event())
+    names = {f.name for f in AGENTS["unit_test"]._candidates(ctx, fns, set(), set())}
+    assert names == {"hi", "pick"}, names  # listing reads a mutable global, take needs a request context
+    assert is_route_handler(next(f for f in fns if f.name == "hi"))
+    # Unannotated `item_id` is inferred as an int, so representative cases can be built.
+    assert build_cases(next(f for f in fns if f.name == "pick"))
+    assert generated_test_path("app.routes") == f"{GENERATED_DIR}/test_app_routes.py"
 
 
 def test_functional_agent_generates_suite(fixture_ws):
@@ -177,18 +221,129 @@ def test_drop_failing_llm_tests_keeps_the_rest():
     assert out is not None and "def test_ok" in out and "test_bad" not in out and "parametrize" not in out
 
 
-def test_polyglot_test_pruning_and_exports():
-    from app.agents.polyglot_tests import _js_exports, drop_go_tests, drop_js_tests
+# ------------------------------------------------------------------ polyglot language support
 
-    js = ("import test from 'node:test';\nimport assert from 'node:assert/strict';\n"
-          "test('ok case', () => { assert.equal(f('a)'), 1); });\n"
-          "test('bad case', () => {\n  assert.equal(f(\"}\"), 2);\n});\n")
-    out = drop_js_tests(js, {"bad case"})
-    assert out is not None and "ok case" in out and "bad case" not in out
-    go = ("package calc\nimport \"testing\"\nfunc TestSkyforgeAddOk(t *testing.T) {\n if Add(1, 2) \\!= 3 { t.Fatal(\"}\") }\n}\n"
-          "func TestSkyforgeAddBad(t *testing.T) {\n if Add(1, 1) \\!= 3 { t.Fatal(\"x\") }\n}\n")
-    out = drop_go_tests(go, {"TestSkyforgeAddBad"})
-    assert out is not None and "TestSkyforgeAddOk" in out and "TestSkyforgeAddBad" not in out
-    src = ("export function a() {}\nexport const b = () => 1;\nfunction c() {}\nmodule.exports = { c, d: c };\n"
-           "export { e as f };\n")
-    assert {"a", "b", "c", "d", "f"} <= _js_exports(src)
+
+@pytest.fixture()
+def polyglot_ws(tmp_path) -> RepoWorkspace:
+    """A repository with Go, Java and Terraform but no Python, to exercise the non-Python paths."""
+    (tmp_path / "cmd").mkdir()
+    (tmp_path / "cmd" / "main.go").write_text(
+        'package main\n\nimport "github.com/gin-gonic/gin"\n\n'
+        "func CalculateTotal(items []int, taxRate float64) (float64, error) {\n"
+        "\tsum := 0\n\tfor _, i := range items {\n\t\tif i < 0 {\n\t\t\treturn 0, nil\n\t\t}\n\t\tsum += i\n\t}\n"
+        "\treturn float64(sum) * (1 + taxRate), nil\n}\n\n"
+        "func main() {\n\tr := gin.Default()\n\tr.GET(\"/orders/:id\", getOrder)\n"
+        "\tr.POST(\"/orders\", createOrder)\n\tr.Run()\n}\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "OrderController.java").write_text(
+        "@RestController\npublic class OrderController {\n"
+        '    @GetMapping("/api/orders")\n    public List<Order> list() { return repo.findAll(); }\n\n'
+        '    @PostMapping("/api/orders")\n    public Order create(@RequestBody Order o) { return repo.save(o); }\n}\n')
+    (tmp_path / "infra").mkdir()
+    (tmp_path / "infra" / "main.tf").write_text(
+        'resource "aws_s3_bucket" "assets" {\n  bucket = "poly-assets"\n}\n'
+        'resource "aws_dynamodb_table" "orders" {\n  name     = "orders"\n  hash_key = "id"\n'
+        '  attribute {\n    name = "id"\n    type = "S"\n  }\n}\n')
+    return RepoWorkspace(tmp_path)
+
+
+def test_language_profile_detects_every_language_present(polyglot_ws):
+    profile = profile_repository(polyglot_ws)
+    assert set(profile.languages) == {"go", "java", "terraform"}
+    assert profile.files["go"] == 1 and profile.sloc["go"] > 0
+
+
+@pytest.mark.parametrize(("rel", "expected"), [
+    ("cmd/main.go", "cmd/main_test.go"),
+    ("src/Order.java", "src/test/java/OrderTest.java"),
+    ("lib/order.rb", "spec/order_spec.rb"),
+    ("src/order.ts", "src/__tests__/order.test.ts"),
+    ("src/order.rs", "tests/order_test.rs"),
+    ("infra/main.tf", None),
+])
+def test_test_path_is_idiomatic_per_language(rel, expected):
+    assert idiomatic_test_path(rel) == expected
+
+
+def test_routes_are_discovered_in_go_and_spring(polyglot_ws):
+    found = {(r.framework, r.method, r.path)
+             for p in polyglot_ws.iter_files({".go", ".java"})
+             for r in discover_any_routes(polyglot_ws, p)}
+    assert ("go-http", "GET", "/orders/:id") in found
+    assert ("go-http", "POST", "/orders") in found
+    assert ("spring", "GET", "/api/orders") in found
+    assert ("spring", "POST", "/api/orders") in found
+
+
+def test_unit_agent_scaffolds_tests_for_non_python_languages(polyglot_ws):
+    ctx, _ = make_ctx(polyglot_ws, "unit_test")
+    res = AGENTS["unit_test"].run(ctx)
+    langs = {f.rule_id for f in res.findings}
+    assert "coverage:language:go" in langs and "coverage:language:java" in langs
+    assert set(res.metrics["scaffolded_languages"]) == {"go", "java"}
+    policy = PolicyEngine(polyglot_ws)
+    for finding in res.findings:
+        if finding.proposal:
+            assert policy.validate(finding.proposal)["passed"], finding.rule_id
+
+
+def test_functional_agent_covers_non_python_stacks(polyglot_ws):
+    ctx, _ = make_ctx(polyglot_ws, "functional_test")
+    res = AGENTS["functional_test"].run(ctx)
+    assert res.metrics["routes_by_language"] == {"go": 2, "java": 2}
+    rules = {f.rule_id for f in res.findings}
+    assert "functional:missing-journeys:go-http" in rules
+    assert "functional:missing-journeys:spring" in rules
+    policy = PolicyEngine(polyglot_ws)
+    for finding in res.findings:
+        if finding.proposal:
+            assert policy.validate(finding.proposal)["passed"], finding.rule_id
+
+
+# ------------------------------------------------------------------ Terraform-derived AWS mocks
+
+
+def test_aws_mocks_mirror_the_repository_terraform(polyglot_ws):
+    plan = plan_aws_mocks(parse_terraform(polyglot_ws))
+    assert plan.services == ["dynamodb", "s3"]
+    bucket = next(r for r in plan.resources if r.service == "s3")
+    table = next(r for r in plan.resources if r.service == "dynamodb")
+    assert bucket.physical_name == "poly-assets"
+    assert table.physical_name == "orders"
+    assert table.config["key_schema"] == [{"AttributeName": "id", "KeyType": "HASH"}]
+    assert table.config["attribute_definitions"] == [{"AttributeName": "id", "AttributeType": "S"}]
+    files = mock_files(plan)
+    assert set(files) == {f"{MOCK_DIR}/__init__.py", f"{MOCK_DIR}/conftest.py",
+                          f"{MOCK_DIR}/test_terraform_inventory.py", f"{MOCK_DIR}/terraform_inventory.json"}
+    for rel, content in files.items():
+        if rel.endswith(".py"):
+            ast.parse(content)  # the generated fixtures must be importable Python
+            assert not scan_generated_code(content), rel
+    assert "poly-assets" in files[f"{MOCK_DIR}/conftest.py"]
+    assert "mock_aws" in files[f"{MOCK_DIR}/conftest.py"]
+
+
+def test_aws_mocks_are_skipped_when_the_repo_has_no_terraform(tmp_path):
+    (tmp_path / "app.py").write_text("def hello():\n    return 'hi'\n")
+    ws = RepoWorkspace(tmp_path)
+    ctx, _ = make_ctx(ws, "unit_test")
+    res = AGENTS["unit_test"].run(ctx)
+    assert res.metrics.get("aws_mock_files", 0) == 0
+    assert not any(f.rule_id == "coverage:aws-mocks" for f in res.findings)
+
+
+def test_aws_mocks_are_skipped_when_no_resource_type_is_mockable(tmp_path):
+    (tmp_path / "main.tf").write_text('resource "aws_ssm_patch_baseline" "pb" {\n  name = "pb"\n}\n')
+    ws = RepoWorkspace(tmp_path)
+    plan = plan_aws_mocks(parse_terraform(ws))
+    assert not plan.resources and plan.skipped_types == {"aws_ssm_patch_baseline": 1}
+
+
+def test_functional_suite_covers_the_richer_scenario_catalogue(fixture_ws):
+    ctx, _ = make_ctx(fixture_ws, "functional_test")
+    res = AGENTS["functional_test"].run(ctx)
+    suite = next(f.proposal.diff for f in res.findings if f.proposal and f.target.endswith(".py"))
+    for scenario in ("_rejects_an_oversized_payload", "_rejects_malformed_body",
+                     "test_responses_declare_a_content_type", "test_unknown_route_returns_404"):
+        assert scenario in suite, scenario

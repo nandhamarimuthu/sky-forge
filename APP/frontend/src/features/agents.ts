@@ -32,9 +32,16 @@ export function hashColor(s: string): string {
 export const money = (n: number | null | undefined, digits = 0) =>
   n === null || n === undefined ? "—" : "$" + n.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
+export function normalizeTimestamp(iso: string): string {
+  // SQLite returns UTC timestamps without a timezone suffix.
+  return /[T ]\d{2}:\d{2}/.test(iso) && !/(Z|[+-]\d{2}:?\d{2})$/i.test(iso) ? `${iso}Z` : iso;
+}
+
 export function timeAgo(iso?: string | null, now: number = Date.now()): string {
   if (!iso) return "—";
-  const s = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
+  const timestamp = new Date(normalizeTimestamp(iso)).getTime();
+  if (!Number.isFinite(timestamp)) return "—";
+  const s = Math.max(0, Math.floor((now - timestamp) / 1000));
   if (s < 5) return "just now";
   if (s < 60) return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s ago`;

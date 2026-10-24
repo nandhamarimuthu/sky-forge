@@ -1,20 +1,13 @@
 from __future__ import annotations
 
-import json
 import re
-import shutil
 import statistics
-import tempfile
-import zipfile
-from pathlib import Path, PurePosixPath
 
 from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.adapters.aws.dump import DUMP_FILES, DumpAwsAdapter
-from app.adapters.aws.factory import available_fixture_dumps, fixture_dumps_dir, uploaded_dump_dir
 from app.adapters.repository.git_repo import RepositoryError, parse_repo_url
 from app.agents import AGENTS
 from app.api.deps import accessible_project_ids, client_ip, container, get_principal, load_project, require
@@ -73,27 +66,12 @@ def create_project(body: ProjectCreate, request: Request, db: Session = Depends(
     project.repository = RepositoryConnection(provider=ref.provider, url=ref.url, owner=ref.owner, name=ref.name,
                                               branch=body.branch, token_secret_ref=body.token_secret_ref)
     aws = body.aws
-    mode = aws.mode if aws else "dump"
     account_id = aws.account_id if aws else "000000000000"
     regions = aws.regions if aws else [c.settings.aws_region]
     tag = aws.project_tag if aws and aws.project_tag else re.sub(r"[^a-z0-9-]+", "-", body.name.lower())
-    dump_ref = None
-    if mode == "dump":
-        dumps = available_fixture_dumps(c.settings)
-        name = aws.dump if aws and aws.dump else None
-        if name and name not in dumps:
-            raise ApiError(422, "unknown_dump", f"AWS data dump '{name}' does not exist", {"available": dumps})
-        if name:
-            dump_ref = f"fixture:{name}"
-            manifest = json.loads((fixture_dumps_dir(c.settings) / name / "manifest.json").read_text())
-            account_id = manifest.get("account_id", account_id)
-            regions = [manifest.get("region", regions[0])]
-            tag = aws.project_tag if aws and aws.project_tag else manifest.get("project_tag", "")
-        else:
-            dump_ref = "terraform"
     project.cloud_account = CloudAccountReference(
         account_id=account_id, project_tag=tag, regions=regions, services=c.settings.service_allowlist,
-        mode=mode, profile_ref=aws.profile_ref if aws else None, dump_ref=dump_ref)
+        mode="dump", dump_ref="terraform")
     db.add(project)
     db.flush()
     audit(db, principal.name, "project.create", "project", project.id, "allowed",
@@ -182,7 +160,9 @@ def aws_resources(project_id: str, request: Request, db: Session = Depends(get_d
     adapter = aws_adapter_for(c, db, p)
     findings = db.execute(select(Finding).where(Finding.project_id == p.id, Finding.category == "cost",
                                                 Finding.status.in_(OPEN_STATUSES))).scalars().all()
-    by_resource = {(f.location or {}).get("resource_id"): f for f in findings}
+    by_resource = {(f.location or {}).get("resource_id"): f for f in findings
+                   if (f.evidence or {}).get("scope", {}).get("terraform_fingerprint")
+                   == adapter.report.meta["terraform_fingerprint"]}
     items = []
     for r in adapter.inventory():
         metrics = {m.metric: {"avg": round(statistics.fmean(v for _, v in m.points), 2) if m.points else None,
@@ -209,7 +189,9 @@ def aws_cost(project_id: str, request: Request, days: int = Query(90, ge=7, le=1
     cost = adapter.cost(days)
     findings = db.execute(select(Finding).where(Finding.project_id == p.id,
                                                 Finding.category.in_(["cost", "anomaly"]))).scalars().all()
-    open_f = [f for f in findings if f.status in OPEN_STATUSES]
+    open_f = [f for f in findings if f.status in OPEN_STATUSES
+              and (f.evidence or {}).get("scope", {}).get("terraform_fingerprint")
+              == adapter.report.meta["terraform_fingerprint"]]
     approved = db.execute(select(RemediationProposal).where(
         RemediationProposal.project_id == p.id, RemediationProposal.kind == "iac_change",
         RemediationProposal.status.in_(["approved", "applying", "applied", "verified"]))).scalars().all()
@@ -266,100 +248,24 @@ def quality(project_id: str, request: Request, db: Session = Depends(get_db),
 
 # ---------------------------------------------------------------- AWS data source
 
-MAX_UPLOAD_BYTES = 50 * 1024 * 1024
-MAX_UNZIPPED_BYTES = 250 * 1024 * 1024
-
-
 class AwsSourceUpdate(BaseModel):
     dump: str = Field(max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     project_tag: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9._:/=+\-@ ]*$")
-
-
-def _apply_manifest(acct: CloudAccountReference, dump_dir: Path, tag: str | None) -> None:
-    manifest = json.loads((dump_dir / "manifest.json").read_text(encoding="utf-8"))
-    acct.mode = "dump"
-    acct.account_id = str(manifest.get("account_id", acct.account_id))[:20]
-    acct.regions = [str(manifest.get("region", (acct.regions or ["eu-west-2"])[0]))[:30]]
-    acct.project_tag = tag if tag is not None else str(manifest.get("project_tag", ""))[:80]
 
 
 @router.put("/{project_id}/aws/source")
 def set_aws_source(project_id: str, body: AwsSourceUpdate, request: Request, db: Session = Depends(get_db),
                    principal: Principal = Depends(require("project:create")),
                    c: Container = Depends(container)) -> dict:
-    p = load_project(db, principal, project_id, request)
-    acct = p.cloud_account or CloudAccountReference(project_id=p.id, account_id="000000000000", regions=[],
-                                                    services=c.settings.service_allowlist)
-    if body.dump == "terraform":
-        acct.mode, acct.dump_ref = "dump", "terraform"
-        if body.project_tag is not None:
-            acct.project_tag = body.project_tag
-    else:
-        if body.dump not in available_fixture_dumps(c.settings):
-            raise ApiError(422, "unknown_dump", f"AWS data dump '{body.dump}' does not exist")
-        acct.dump_ref = f"fixture:{body.dump}"
-        _apply_manifest(acct, fixture_dumps_dir(c.settings) / body.dump, body.project_tag)
-    p.cloud_account = acct
-    audit(db, principal.name, "aws.source.select", "project", p.id, "allowed", {"dump": body.dump},
-          client_ip(request))
-    return {"dump_ref": acct.dump_ref, "account_id": acct.account_id, "regions": acct.regions,
-            "project_tag": acct.project_tag}
+    load_project(db, principal, project_id, request)
+    raise ApiError(422, "terraform_only",
+                   "AWS cost analysis only uses the scanned repository's Terraform. External dumps cannot be selected.")
 
 
 @router.post("/{project_id}/aws/dump", status_code=status.HTTP_201_CREATED)
 async def upload_aws_dump(project_id: str, request: Request, file: UploadFile = File(...),
                           db: Session = Depends(get_db), principal: Principal = Depends(require("project:create")),
                           c: Container = Depends(container)) -> dict:
-    p = load_project(db, principal, project_id, request)
-    if not (file.filename or "").lower().endswith(".zip"):
-        raise ApiError(422, "invalid_upload", "Upload a .zip containing the export files")
-    data = await file.read(MAX_UPLOAD_BYTES + 1)
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise ApiError(413, "too_large", "Dump archives are limited to 50 MB")
-    tmp = Path(tempfile.mkdtemp(prefix="skyforge-dump-"))
-    try:
-        archive = tmp / "upload.zip"
-        archive.write_bytes(data)
-        try:
-            zf = zipfile.ZipFile(archive)
-        except zipfile.BadZipFile as exc:
-            raise ApiError(422, "invalid_upload", "Not a valid zip archive") from exc
-        out = tmp / "dump"
-        out.mkdir()
-        total, written = 0, []
-        with zf:
-            for info in zf.infolist():
-                if info.is_dir():
-                    continue
-                pure = PurePosixPath(info.filename)
-                if pure.is_absolute() or ".." in pure.parts or pure.name not in DUMP_FILES:
-                    continue  # only the known export files are extracted; everything else is ignored
-                total += info.file_size
-                if total > MAX_UNZIPPED_BYTES or info.file_size > 60 * 1024 * 1024 or (
-                        info.compress_size and info.file_size / info.compress_size > 200):
-                    raise ApiError(413, "too_large", f"{pure.name} is too large or over-compressed")
-                (out / pure.name).write_bytes(zf.read(info))
-                written.append(pure.name)
-        if "manifest.json" not in written or "cost_and_usage.csv" not in written:
-            raise ApiError(422, "invalid_dump", "The archive must contain manifest.json and cost_and_usage.csv",
-                           {"found": sorted(written), "expected": list(DUMP_FILES)})
-        probe = DumpAwsAdapter(out)
-        probe.inventory()
-        if probe.report.errors:
-            raise ApiError(422, "invalid_dump", "Some files could not be parsed", probe.report.errors)
-        dest = uploaded_dump_dir(c.settings, p.id)
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(out), dest)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
-    acct = p.cloud_account or CloudAccountReference(project_id=p.id, account_id="000000000000", regions=[],
-                                                    services=c.settings.service_allowlist)
-    acct.dump_ref = "upload"
-    _apply_manifest(acct, dest, None)
-    p.cloud_account = acct
-    audit(db, principal.name, "aws.dump.upload", "project", p.id, "allowed",
-          {"files": sorted(written), "bytes": len(data)}, client_ip(request))
-    return {"dump_ref": "upload", "files": sorted(written), "account_id": acct.account_id,
-            "regions": acct.regions, "missing_evidence": probe.report.missing_evidence[:20]}
+    load_project(db, principal, project_id, request)
+    raise ApiError(422, "terraform_only",
+                   "AWS cost analysis generates its own dump from the scanned repository's Terraform; uploads are disabled.")

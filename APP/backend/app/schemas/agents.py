@@ -86,7 +86,7 @@ class ArtifactDraft(_Strict):
 
 class AgentResult(_Strict):
     agent_id: AgentId
-    status: Literal["completed", "partial", "failed", "skipped"] = "completed"
+    status: Literal["completed", "partial", "failed"] = "completed"
     findings: list[FindingDraft] = Field(default_factory=list)
     test_runs: list[TestRunDraft] = Field(default_factory=list)
     artifacts: list[ArtifactDraft] = Field(default_factory=list)

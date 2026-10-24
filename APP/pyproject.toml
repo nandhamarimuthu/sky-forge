@@ -15,13 +15,12 @@ dependencies = [
   "sqlalchemy==2.0.36",
   "alembic==1.14.0",
   "httpx==0.28.1",
+  "pyjwt[crypto]==2.10.1",
   "packaging==24.2",
   "radon==6.0.1",
-  "lizard==1.17.13",
   "ruff==0.8.4",
   "boto3==1.35.90",
   "python-multipart==0.0.20",
-  "PyJWT[crypto]==2.10.1",
 ]
 
 [project.optional-dependencies]

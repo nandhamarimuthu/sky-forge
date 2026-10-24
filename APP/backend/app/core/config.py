@@ -26,18 +26,27 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 300
     scan_rate_limit_per_minute: int = 10
 
+    # "ollama" runs a local model; "openai" calls the hosted OpenAI API (gpt-4o-mini by default).
+    llm_provider: Literal["ollama", "openai"] = "ollama"
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "gemma3"
+    openai_base_url: str = Field(default="https://api.openai.com/v1", pattern=r"^https://")
+    openai_model: str = "gpt-4o-mini"
+    # Env var holding the OpenAI API key; the key itself is never stored in settings or returned by the API.
+    openai_api_key_env: str = Field(default="OPENAI_API_KEY", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
     llm_enabled: bool = True
     llm_timeout_s: int = 90
 
     allowed_git_hosts: str = "github.com,gitlab.com,bitbucket.org"
     # Env var holding a GitHub token used to push fix branches / open draft PRs (projects may override per repo).
     github_token_env: str = Field(default="GITHUB_TOKEN", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
-    github_app_id: str | None = None
-    github_app_installation_id: str | None = None
-    github_app_private_key_path: Path | None = None
     github_api_url: str = Field(default="https://api.github.com", pattern=r"^https://")
+    # GitHub App auth (preferred over a PAT when set): short-lived installation tokens are minted on demand.
+    github_app_id: str = ""
+    github_app_installation_id: str = ""
+    github_app_private_key_path: Path | None = None
+    # Alternative to the path: env var holding the PEM contents.
+    github_app_private_key_env: str = Field(default="GITHUB_APP_PRIVATE_KEY", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
     max_repo_mb: int = 300
     clone_timeout_s: int = 180
     agent_timeout_s: int = 900
@@ -45,6 +54,7 @@ class Settings(BaseSettings):
 
     sandbox_enabled: bool = True
     sandbox_python_image: str = "python:3.11-slim"
+    sandbox_node_image: str = "node:22-slim"
     sandbox_timeout_s: int = 600
     sandbox_memory: str = "1g"
     sandbox_cpus: str = "1.5"
@@ -64,6 +74,15 @@ class Settings(BaseSettings):
     @classmethod
     def _absolute(cls, v: Path) -> Path:
         return v if v.is_absolute() else (BASE_DIR / v).resolve()
+
+    @field_validator("github_app_private_key_path", mode="after")
+    @classmethod
+    def _absolute_optional(cls, v: Path | None) -> Path | None:
+        return None if v is None else (v if v.is_absolute() else (BASE_DIR / v).resolve())
+
+    @property
+    def github_app_configured(self) -> bool:
+        return bool(self.github_app_id and self.github_app_installation_id)
 
     @staticmethod
     def _csv(value: str) -> list[str]:

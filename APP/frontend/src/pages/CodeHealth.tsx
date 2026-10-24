@@ -25,7 +25,7 @@ export function CodeHealthPage() {
           <section className="kpis">
             <div className="kpi" style={{ ["--kc" as any]: "#C98F00", ["--kbg" as any]: "var(--sun-t)", display: "flex", gap: 14, alignItems: "center" }}>
               <Ring value={m.health_score} size={64} />
-              <div><div className="kpi-label">Health score</div><div className="kpi-sub">{m.python_modules} modules · {m.sloc} SLOC</div></div>
+              <div><div className="kpi-label">Health score</div><div className="kpi-sub">{(m.python_modules ?? 0) + (m.javascript_modules ?? 0)} modules · {m.sloc} source lines</div></div>
             </div>
             <Kpi label="Avg complexity" value={m.avg_complexity ?? "—"} c="var(--orchid)" bg="var(--orchid-t)" sub={<>max <b>{m.max_complexity}</b></>} />
             <Kpi label="Maintainability" value={m.avg_maintainability ?? "—"} c="var(--teal)" bg="var(--teal-t)" sub="Radon MI (higher is better)" />

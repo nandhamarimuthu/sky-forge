@@ -20,7 +20,7 @@ TOOL_NAMES = {
     "static.radon": "Compute complexity/maintainability with Radon",
     "terraform.parse": "Parse Terraform resources",
     "aws.read": "Read-only AWS inventory, metrics and cost",
-    "llm.generate": "Ask the local Ollama model for drafts and explanations",
+    "llm.generate": "Ask the configured LLM (local Ollama or OpenAI) for drafts and explanations",
 }
 
 

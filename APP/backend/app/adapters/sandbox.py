@@ -7,13 +7,12 @@ access but writes only into the throwaway copy. If Docker is unavailable, execut
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
+import shlex
 import shutil
 import subprocess
 import tempfile
-import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET  # noqa: S405 - parsing junit produced inside our own sandbox
@@ -37,80 +36,69 @@ class SandboxResult:
     coverage_percent: float | None = None
     coverage_files: dict[str, float] = field(default_factory=dict)
     missing_lines: dict[str, list[int]] = field(default_factory=dict)
+    statements: dict[str, int] = field(default_factory=dict)
+    missing_counts: dict[str, int] = field(default_factory=dict)
     duration_s: float = 0.0
     failures: list[dict] = field(default_factory=list)
     log_tail: str = ""
     reason: str = ""
+    framework: str = "pytest"
+    covered_lines: int | None = None
+    total_lines: int | None = None
 
 
 class DockerSandbox:
+    #: Host-side pip wheel cache, shared by every sandbox run so repeat scans skip re-downloading wheels.
+    CACHE_VOLUME = "skyforge-pip-cache"
+
     def __init__(self, image: str, memory: str, cpus: str, timeout_s: int, enabled: bool = True,
-                 cache_dir: Path | None = None):
+                 node_image: str = "node:22-slim"):
         self.image = image
+        self.node_image = node_image
         self.memory = memory
         self.cpus = cpus
         self.timeout_s = timeout_s
         self.enabled = enabled
-        self.cache_dir = cache_dir
         self._available: bool | None = None
-        self._availability_checked_at = 0.0
-        self._locks: dict[str, threading.Lock] = {}
-        self._locks_guard = threading.Lock()
-
-    def _cache_key(self, work: Path, script: str) -> str | None:
-        """Key on image + install script + requirement files; projects that install themselves are not cached."""
-        if self.cache_dir is None or (work / "pyproject.toml").is_file() or (work / "setup.py").is_file():
-            return None
-        h = hashlib.sha256(f"{self.image}\n{script}".encode())
-        for p in sorted(work.glob("requirements*.txt")) + sorted(work.glob("requirements/*.txt")):
-            h.update(p.name.encode() + p.read_bytes())
-        return h.hexdigest()[:24]
-
-    def _lock(self, key: str) -> threading.Lock:
-        with self._locks_guard:
-            return self._locks.setdefault(key, threading.Lock())
+        self._image_ready = False
 
     def available(self) -> bool:
         if not self.enabled:
             return False
-        now = time.monotonic()
-        if self._available is True or (self._available is False and now - self._availability_checked_at < 5):
-            return bool(self._available)
-        exe = shutil.which("docker")
-        if not exe:
-            self._available = False
-        else:
-            try:
-                r = subprocess.run([exe, "info", "--format", "{{.ServerVersion}}"], capture_output=True,
-                                   text=True, timeout=15, check=False)
-                self._available = r.returncode == 0
-            except (subprocess.TimeoutExpired, OSError):
+        if self._available is None:
+            exe = shutil.which("docker")
+            if not exe:
                 self._available = False
-        self._availability_checked_at = now
+            else:
+                try:
+                    r = subprocess.run([exe, "info", "--format", "{{.ServerVersion}}"], capture_output=True,
+                                       text=True, timeout=15, check=False)
+                    self._available = r.returncode == 0
+                except (subprocess.TimeoutExpired, OSError):
+                    self._available = False
         return self._available
 
-    def _ensure_image(self, image: str | None = None) -> None:
-        image = image or self.image
-        r = subprocess.run(["docker", "image", "inspect", image], capture_output=True, timeout=30, check=False)
+    def _ensure_image(self) -> None:
+        if self._image_ready:
+            return
+        r = subprocess.run(["docker", "image", "inspect", self.image], capture_output=True, timeout=30, check=False)
         if r.returncode != 0:
-            log.info("Pulling sandbox image %s", image)
-            subprocess.run(["docker", "pull", "-q", image], capture_output=True, timeout=600, check=True)
+            log.info("Pulling sandbox image %s", self.image)
+            subprocess.run(["docker", "pull", "-q", self.image], capture_output=True, timeout=600, check=True)
+        self._image_ready = True
 
-    def toolchain(self, repo: Path, image: str, env: dict[str, str] | None = None) -> ToolchainSession:
-        return ToolchainSession(self, repo, image, env or {})
-
-    def _docker(self, work: Path, script: str, network: bool, timeout: int, image: str | None = None,
-                env: dict[str, str] | None = None) -> tuple[int | None, str]:
+    def _docker(self, work: Path, script: str, network: bool, timeout: int) -> tuple[int | None, str]:
         name = f"skyforge-sbx-{uuid.uuid4().hex[:10]}"
         cmd = ["docker", "run", "--rm", "--name", name, "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                "--memory", self.memory, "--cpus", self.cpus, "--pids-limit", "512", "--read-only",
                "--tmpfs", "/tmp:rw,size=512m", "-e", "HOME=/tmp", "-e", "PIP_DISABLE_PIP_VERSION_CHECK=1",  # noqa: S108
                "-e", "PYTHONDONTWRITEBYTECODE=1", "-v", f"{work}:/work:rw", "-w", "/work"]
-        for k, v in (env or {}).items():
-            cmd += ["-e", f"{k}={v}"]
-        if not network:
+        if network:
+            # Wheel cache only matters for the install phase, which is the only phase with network access.
+            cmd += ["-v", f"{self.CACHE_VOLUME}:/pipcache", "-e", "PIP_CACHE_DIR=/pipcache"]
+        else:
             cmd += ["--network", "none"]
-        cmd += [image or self.image, "sh", "-c", script]
+        cmd += [self.image, "sh", "-c", script]
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
             return r.returncode, (r.stdout + r.stderr)[-6000:]
@@ -145,6 +133,186 @@ class DockerSandbox:
             if err:
                 return err
             return s.pytest(test_paths, coverage=coverage)
+
+    def run_javascript_tests(self, repo: Path) -> SandboxResult:
+        """Measure line coverage using the repository's installed Jest or Vitest, never host Node."""
+        started = time.monotonic()
+        framework = "unknown"
+        try:
+            try:
+                manifest = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+                deps = {**manifest.get("dependencies", {}), **manifest.get("devDependencies", {})}
+            except (OSError, ValueError, TypeError, AttributeError):
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Missing or malformed package.json")
+            framework = next((runner for runner in ("jest", "vitest") if runner in deps), "unknown")
+            if framework == "unknown":
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="No supported test runner declared (Jest or Vitest required)")
+            provider = "v8" if "@vitest/coverage-v8" in deps else "istanbul"
+            if framework == "vitest" and f"@vitest/coverage-{provider}" not in deps:
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Vitest coverage requires an existing @vitest/coverage-v8 or "
+                                            "@vitest/coverage-istanbul dependency; automatic downloads refused")
+            node = DockerSandbox(self.node_image, self.memory, self.cpus, self.timeout_s, enabled=self.enabled)
+            if not node.available():
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Docker sandbox unavailable — execution refused")
+            node._ensure_image()
+            with tempfile.TemporaryDirectory(prefix=".sf-js-", dir=repo.resolve().parent) as scratch:
+                work = Path(scratch) / "work"
+                shutil.copytree(repo, work, symlinks=False,
+                                ignore=shutil.ignore_patterns(*SKIP_DIRS, ".sf_*", ".npmrc"))
+                install = "ci" if any((work / p).is_file() for p in ("package-lock.json", "npm-shrinkwrap.json")) else "install"
+                code, out = node._docker(
+                    work, f"npm {install} --ignore-scripts --include=dev --no-audit --no-fund --cache /work/.sf_npm",
+                    network=True, timeout=self.timeout_s)
+                if code != 0:
+                    return SandboxResult(status="error", framework=framework, exit_code=code,
+                                         reason="JavaScript dependency installation failed", log_tail=out[-3000:],
+                                         duration_s=round(time.monotonic() - started, 1))
+                reports = work / ".sf_js_results"
+                if reports.is_symlink() or reports.is_file():
+                    reports.unlink()
+                elif reports.exists():
+                    shutil.rmtree(reports)
+                reports.mkdir()
+                script = self._javascript_test_script(framework, provider)
+                code, out = node._docker(work, script, network=False, timeout=self.timeout_s)
+                res = self._parse_javascript(work, framework, code, out)
+                res.duration_s = round(time.monotonic() - started, 1)
+                return res
+        except (OSError, subprocess.SubprocessError, shutil.Error) as exc:
+            return SandboxResult(status="error", framework=framework,
+                                 reason=f"JavaScript sandbox failed: {exc}"[:500],
+                                 duration_s=round(time.monotonic() - started, 1))
+
+    @staticmethod
+    def _javascript_test_script(framework: str, provider: str) -> str:
+        include = "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
+        exclude = [
+            "**/node_modules/**", "**/.*/**", "**/{dist,build,coverage,out,.next,generated,vendor}/**",
+            "**/{test,tests,__tests__,__mocks__,unit-tests,functional-tests,e2e,fixtures}/**",
+            "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}", "**/*.d.{ts,mts,cts}",
+            "**/*.{config,generated}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}", "**/test-*.{js,ts}",
+        ]
+        directory = "/work/.sf_js_results"
+        if framework == "jest":
+            args = [
+                "--runInBand", "--watch=false", "--watchAll=false", "--ci", "--coverage",
+                "--coverageProvider=babel", "--coverageReporters=json", f"--coverageDirectory={directory}",
+                "--collectCoverageFrom=" + json.dumps([include, *["!" + pattern for pattern in exclude]]),
+                "--coveragePathIgnorePatterns=/node_modules/", "--json", f"--outputFile={directory}/tests.json",
+            ]
+            return "node ./node_modules/jest/bin/jest.js " + " ".join(map(shlex.quote, args))
+        args = [
+            "run", "--coverage.enabled", f"--coverage.provider={provider}", "--coverage.reporter=json",
+            "--coverage.reportOnFailure", f"--coverage.reportsDirectory={directory}",
+            f"--coverage.include={include}", "--reporter=json", f"--outputFile={directory}/tests.json",
+            *[f"--coverage.exclude={pattern}" for pattern in exclude],
+        ]
+        # Vitest 4 always includes matching unimported files; older releases require coverage.all.
+        driver = (
+            "const fs=require('node:fs');const {spawnSync}=require('node:child_process');"
+            "const v=JSON.parse(fs.readFileSync('./node_modules/vitest/package.json','utf8')).version;"
+            f"const args={json.dumps(args)};"
+            "if(parseInt(v,10)<4)args.push('--coverage.all');"
+            "const r=spawnSync(process.execPath,['./node_modules/vitest/vitest.mjs',...args],"
+            "{stdio:'inherit',env:{...process.env,CI:'true'}});process.exit(r.status??1);"
+        )
+        return "node -e " + shlex.quote(driver)
+
+    @staticmethod
+    def _parse_javascript(work: Path, framework: str, code: int | None, out: str) -> SandboxResult:
+        res = SandboxResult(status="error", framework=framework, exit_code=code, log_tail=out[-3000:])
+
+        def count(value: object) -> int:
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("Invalid nonnegative integer in report")
+            return value
+
+        def report(name: str) -> dict:
+            path = work / ".sf_js_results" / name
+            if work.resolve() not in path.resolve().parents:
+                raise ValueError("Report points outside sandbox")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("Report is not an object")
+            return data
+
+        try:
+            tests = report("tests.json")
+            res.total = count(tests["numTotalTests"])
+            res.passed = count(tests["numPassedTests"])
+            res.failed = count(tests["numFailedTests"])
+            res.skipped = count(tests["numPendingTests"]) + count(tests.get("numTodoTests", 0))
+            res.errors = count(tests.get("numRuntimeErrorTestSuites", 0))
+            if res.total != res.passed + res.failed + res.skipped:
+                raise ValueError("Inconsistent test counts")
+            for suite in tests["testResults"]:
+                for case in suite["assertionResults"]:
+                    if case.get("status") == "failed" and len(res.failures) < 25:
+                        res.failures.append({"test": case.get("fullName", case.get("title", "")),
+                                             "type": "failure",
+                                             "message": "\n".join(case.get("failureMessages", []))[:400]})
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            res.reason = "Missing or malformed JavaScript test report"
+            return res
+        try:
+            data = report("coverage-final.json")
+            covered = 0
+            total = 0
+            files: dict[str, float] = {}
+            missing: dict[str, list[int]] = {}
+            statements: dict[str, int] = {}
+            missing_counts: dict[str, int] = {}
+            for filename, meta in data.items():
+                path = Path(filename)
+                if path.is_absolute():
+                    path = path.relative_to("/work")
+                if ".." in path.parts or path.as_posix() in files:
+                    raise ValueError("Invalid coverage path")
+                filename = path.as_posix()
+                if not isinstance(meta["s"], dict) or set(meta["s"]) != set(meta["statementMap"]):
+                    raise ValueError("Inconsistent statement map")
+                lines: dict[int, int] = {}
+                for statement, hits in meta["s"].items():
+                    line = count(meta["statementMap"][statement]["start"]["line"])
+                    if line == 0:
+                        raise ValueError("Invalid line number")
+                    # Istanbul line coverage uses statement start lines and max hits per line.
+                    lines[line] = max(lines.get(line, 0), count(hits))
+                if not lines:
+                    continue
+                uncovered = sorted(line for line, hits in lines.items() if hits == 0)
+                measured = len(lines)
+                hit = measured - len(uncovered)
+                total += measured
+                covered += hit
+                files[filename] = round(100 * hit / measured, 1)
+                missing[filename] = uncovered[:400]
+                statements[filename] = measured
+                missing_counts[filename] = len(uncovered)
+            if not total:
+                raise ValueError("No executable source lines measured")
+            res.total_lines, res.covered_lines = total, covered
+            res.coverage_percent = round(100 * covered / total, 1)
+            res.coverage_files, res.missing_lines = files, missing
+            res.statements, res.missing_counts = statements, missing_counts
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            res.reason = "Missing, malformed, or empty JavaScript coverage report"
+            return res
+        if code is None:
+            res.reason = "JavaScript test execution timed out"
+        elif not res.total:
+            res.status, res.reason = "not_executed", "No tests collected"
+        elif res.failed or res.errors:
+            res.status = "failed"
+        elif code != 0:
+            res.reason = "JavaScript test execution failed"
+        else:
+            res.status = "passed"
+        return res
 
     @staticmethod
     def _install_script(work: Path) -> str:
@@ -193,6 +361,9 @@ class DockerSandbox:
                         continue
                     res.coverage_files[f] = round(float(meta["summary"]["percent_covered"]), 1)
                     res.missing_lines[f] = list(meta.get("missing_lines", []))[:400]
+                    res.statements[f] = int(meta["summary"].get("num_statements", 0))
+                    res.missing_counts[f] = int(meta["summary"].get("missing_lines",
+                                                                    len(meta.get("missing_lines", []))))
             except (KeyError, ValueError, json.JSONDecodeError):
                 pass
         if code == 5 or (res.total == 0 and junit.exists()):
@@ -256,29 +427,8 @@ class SandboxSession:
             self.sb._ensure_image()
         except (subprocess.SubprocessError, OSError) as exc:
             return SandboxResult(status="error", reason=f"Could not pull sandbox image: {exc}"[:500])
-        script = DockerSandbox._install_script(self.work)
-        key = self.sb._cache_key(self.work, script)
-        if key is None:
-            return self._install(script, started)
-        cached = self.sb.cache_dir / key  # type: ignore[operator]
-        with self.sb._lock(key):
-            if not cached.is_dir():
-                err = self._install(script, started)
-                if err:
-                    return err
-                tmp = cached.with_name(f"{key}.tmp-{uuid.uuid4().hex[:6]}")
-                cached.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(self.work / ".sf_deps", tmp, symlinks=True)
-                tmp.rename(cached)
-                return None
-        shutil.copytree(cached, self.work / ".sf_deps", symlinks=True, dirs_exist_ok=True)
-        self.install_log = f"Dependencies restored from cache {key}"
-        self.installed = True
-        return None
-
-    def _install(self, script: str, started: float) -> SandboxResult | None:
-        assert self.work is not None
-        code, out = self.sb._docker(self.work, script, network=True, timeout=self.sb.timeout_s)
+        code, out = self.sb._docker(self.work, DockerSandbox._install_script(self.work), network=True,
+                                    timeout=self.sb.timeout_s)
         self.install_log = out
         if code != 0:
             return SandboxResult(status="error", exit_code=code, reason="Dependency installation failed",
@@ -304,71 +454,3 @@ class SandboxSession:
         assert self.work is not None
         return self.sb._docker(self.work, f"PYTHONPATH=/work/.sf_deps:/work python '{script_rel}'", network=False,
                                timeout=self.sb.timeout_s)
-
-
-class ToolchainSession(SandboxSession):
-    """A throwaway repo copy executed with another language image (Node, Go, ...). Same isolation rules."""
-
-    def __init__(self, sandbox: DockerSandbox, repo: Path, image: str, env: dict[str, str]):
-        super().__init__(sandbox, repo)
-        self.image = image
-        self.env = env
-
-    def __enter__(self) -> ToolchainSession:
-        self.work = DockerSandbox._copy(self.repo, None)
-        return self
-
-    def prepare(self, install_script: str, cache_paths: list[str] | None = None,
-                key_files: list[str] | None = None) -> SandboxResult | None:
-        """Pull the image and run the dependency step with network, restoring/saving `cache_paths` keyed on
-        `key_files`. Returns an error result on failure."""
-        assert self.work is not None
-        if not self.sb.available():
-            return SandboxResult(status="not_executed", reason="Docker sandbox unavailable — execution refused")
-        try:
-            self.sb._ensure_image(self.image)
-        except (subprocess.SubprocessError, OSError) as exc:
-            return SandboxResult(status="error", reason=f"Could not pull {self.image}: {exc}"[:500])
-        if not install_script:
-            return None
-        key = None
-        if cache_paths and key_files and self.sb.cache_dir is not None:
-            h = hashlib.sha256(f"{self.image}\n{install_script}".encode())
-            for name in key_files:
-                p = self.work / name
-                h.update(name.encode() + (p.read_bytes() if p.is_file() else b"-"))
-            key = "tc-" + h.hexdigest()[:24]
-        if key is not None:
-            cached = self.sb.cache_dir / key  # type: ignore[operator]
-            with self.sb._lock(key):
-                if cached.is_dir():
-                    for rel in cache_paths or []:
-                        if (cached / rel).is_dir():
-                            shutil.copytree(cached / rel, self.work / rel, symlinks=True, dirs_exist_ok=True)
-                    self.install_log = f"Dependencies restored from cache {key}"
-                    return None
-                err = self._prepare_run(install_script)
-                if err is None:
-                    tmp = cached.with_name(f"{key}.tmp-{uuid.uuid4().hex[:6]}")
-                    for rel in cache_paths or []:
-                        if (self.work / rel).is_dir():
-                            shutil.copytree(self.work / rel, tmp / rel, symlinks=True)
-                    tmp.mkdir(parents=True, exist_ok=True)
-                    tmp.rename(cached)
-                return err
-        return self._prepare_run(install_script)
-
-    def _prepare_run(self, install_script: str) -> SandboxResult | None:
-        assert self.work is not None
-        code, out = self.sb._docker(self.work, install_script, network=True, timeout=self.sb.timeout_s,
-                                    image=self.image, env=self.env)
-        self.install_log = out
-        if code != 0:
-            return SandboxResult(status="error", exit_code=code, reason="Dependency installation failed",
-                                 log_tail=out[-3000:])
-        return None
-
-    def sh(self, script: str, timeout: int | None = None) -> tuple[int | None, str]:
-        assert self.work is not None
-        return self.sb._docker(self.work, script, network=False, timeout=timeout or self.sb.timeout_s,
-                               image=self.image, env=self.env)
