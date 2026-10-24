@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -41,16 +42,25 @@ class SandboxResult:
     failures: list[dict] = field(default_factory=list)
     log_tail: str = ""
     reason: str = ""
+    framework: str = "pytest"
+    covered_lines: int | None = None
+    total_lines: int | None = None
 
 
 class DockerSandbox:
-    def __init__(self, image: str, memory: str, cpus: str, timeout_s: int, enabled: bool = True):
+    #: Host-side pip wheel cache, shared by every sandbox run so repeat scans skip re-downloading wheels.
+    CACHE_VOLUME = "skyforge-pip-cache"
+
+    def __init__(self, image: str, memory: str, cpus: str, timeout_s: int, enabled: bool = True,
+                 node_image: str = "node:22-slim"):
         self.image = image
+        self.node_image = node_image
         self.memory = memory
         self.cpus = cpus
         self.timeout_s = timeout_s
         self.enabled = enabled
         self._available: bool | None = None
+        self._image_ready = False
 
     def available(self) -> bool:
         if not self.enabled:
@@ -69,10 +79,13 @@ class DockerSandbox:
         return self._available
 
     def _ensure_image(self) -> None:
+        if self._image_ready:
+            return
         r = subprocess.run(["docker", "image", "inspect", self.image], capture_output=True, timeout=30, check=False)
         if r.returncode != 0:
             log.info("Pulling sandbox image %s", self.image)
             subprocess.run(["docker", "pull", "-q", self.image], capture_output=True, timeout=600, check=True)
+        self._image_ready = True
 
     def _docker(self, work: Path, script: str, network: bool, timeout: int) -> tuple[int | None, str]:
         name = f"skyforge-sbx-{uuid.uuid4().hex[:10]}"
@@ -80,7 +93,10 @@ class DockerSandbox:
                "--memory", self.memory, "--cpus", self.cpus, "--pids-limit", "512", "--read-only",
                "--tmpfs", "/tmp:rw,size=512m", "-e", "HOME=/tmp", "-e", "PIP_DISABLE_PIP_VERSION_CHECK=1",  # noqa: S108
                "-e", "PYTHONDONTWRITEBYTECODE=1", "-v", f"{work}:/work:rw", "-w", "/work"]
-        if not network:
+        if network:
+            # Wheel cache only matters for the install phase, which is the only phase with network access.
+            cmd += ["-v", f"{self.CACHE_VOLUME}:/pipcache", "-e", "PIP_CACHE_DIR=/pipcache"]
+        else:
             cmd += ["--network", "none"]
         cmd += [self.image, "sh", "-c", script]
         try:
@@ -117,6 +133,186 @@ class DockerSandbox:
             if err:
                 return err
             return s.pytest(test_paths, coverage=coverage)
+
+    def run_javascript_tests(self, repo: Path) -> SandboxResult:
+        """Measure line coverage using the repository's installed Jest or Vitest, never host Node."""
+        started = time.monotonic()
+        framework = "unknown"
+        try:
+            try:
+                manifest = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+                deps = {**manifest.get("dependencies", {}), **manifest.get("devDependencies", {})}
+            except (OSError, ValueError, TypeError, AttributeError):
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Missing or malformed package.json")
+            framework = next((runner for runner in ("jest", "vitest") if runner in deps), "unknown")
+            if framework == "unknown":
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="No supported test runner declared (Jest or Vitest required)")
+            provider = "v8" if "@vitest/coverage-v8" in deps else "istanbul"
+            if framework == "vitest" and f"@vitest/coverage-{provider}" not in deps:
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Vitest coverage requires an existing @vitest/coverage-v8 or "
+                                            "@vitest/coverage-istanbul dependency; automatic downloads refused")
+            node = DockerSandbox(self.node_image, self.memory, self.cpus, self.timeout_s, enabled=self.enabled)
+            if not node.available():
+                return SandboxResult(status="not_executed", framework=framework,
+                                     reason="Docker sandbox unavailable — execution refused")
+            node._ensure_image()
+            with tempfile.TemporaryDirectory(prefix=".sf-js-", dir=repo.resolve().parent) as scratch:
+                work = Path(scratch) / "work"
+                shutil.copytree(repo, work, symlinks=False,
+                                ignore=shutil.ignore_patterns(*SKIP_DIRS, ".sf_*", ".npmrc"))
+                install = "ci" if any((work / p).is_file() for p in ("package-lock.json", "npm-shrinkwrap.json")) else "install"
+                code, out = node._docker(
+                    work, f"npm {install} --ignore-scripts --include=dev --no-audit --no-fund --cache /work/.sf_npm",
+                    network=True, timeout=self.timeout_s)
+                if code != 0:
+                    return SandboxResult(status="error", framework=framework, exit_code=code,
+                                         reason="JavaScript dependency installation failed", log_tail=out[-3000:],
+                                         duration_s=round(time.monotonic() - started, 1))
+                reports = work / ".sf_js_results"
+                if reports.is_symlink() or reports.is_file():
+                    reports.unlink()
+                elif reports.exists():
+                    shutil.rmtree(reports)
+                reports.mkdir()
+                script = self._javascript_test_script(framework, provider)
+                code, out = node._docker(work, script, network=False, timeout=self.timeout_s)
+                res = self._parse_javascript(work, framework, code, out)
+                res.duration_s = round(time.monotonic() - started, 1)
+                return res
+        except (OSError, subprocess.SubprocessError, shutil.Error) as exc:
+            return SandboxResult(status="error", framework=framework,
+                                 reason=f"JavaScript sandbox failed: {exc}"[:500],
+                                 duration_s=round(time.monotonic() - started, 1))
+
+    @staticmethod
+    def _javascript_test_script(framework: str, provider: str) -> str:
+        include = "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
+        exclude = [
+            "**/node_modules/**", "**/.*/**", "**/{dist,build,coverage,out,.next,generated,vendor}/**",
+            "**/{test,tests,__tests__,__mocks__,unit-tests,functional-tests,e2e,fixtures}/**",
+            "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}", "**/*.d.{ts,mts,cts}",
+            "**/*.{config,generated}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}", "**/test-*.{js,ts}",
+        ]
+        directory = "/work/.sf_js_results"
+        if framework == "jest":
+            args = [
+                "--runInBand", "--watch=false", "--watchAll=false", "--ci", "--coverage",
+                "--coverageProvider=babel", "--coverageReporters=json", f"--coverageDirectory={directory}",
+                "--collectCoverageFrom=" + json.dumps([include, *["!" + pattern for pattern in exclude]]),
+                "--coveragePathIgnorePatterns=/node_modules/", "--json", f"--outputFile={directory}/tests.json",
+            ]
+            return "node ./node_modules/jest/bin/jest.js " + " ".join(map(shlex.quote, args))
+        args = [
+            "run", "--coverage.enabled", f"--coverage.provider={provider}", "--coverage.reporter=json",
+            "--coverage.reportOnFailure", f"--coverage.reportsDirectory={directory}",
+            f"--coverage.include={include}", "--reporter=json", f"--outputFile={directory}/tests.json",
+            *[f"--coverage.exclude={pattern}" for pattern in exclude],
+        ]
+        # Vitest 4 always includes matching unimported files; older releases require coverage.all.
+        driver = (
+            "const fs=require('node:fs');const {spawnSync}=require('node:child_process');"
+            "const v=JSON.parse(fs.readFileSync('./node_modules/vitest/package.json','utf8')).version;"
+            f"const args={json.dumps(args)};"
+            "if(parseInt(v,10)<4)args.push('--coverage.all');"
+            "const r=spawnSync(process.execPath,['./node_modules/vitest/vitest.mjs',...args],"
+            "{stdio:'inherit',env:{...process.env,CI:'true'}});process.exit(r.status??1);"
+        )
+        return "node -e " + shlex.quote(driver)
+
+    @staticmethod
+    def _parse_javascript(work: Path, framework: str, code: int | None, out: str) -> SandboxResult:
+        res = SandboxResult(status="error", framework=framework, exit_code=code, log_tail=out[-3000:])
+
+        def count(value: object) -> int:
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("Invalid nonnegative integer in report")
+            return value
+
+        def report(name: str) -> dict:
+            path = work / ".sf_js_results" / name
+            if work.resolve() not in path.resolve().parents:
+                raise ValueError("Report points outside sandbox")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("Report is not an object")
+            return data
+
+        try:
+            tests = report("tests.json")
+            res.total = count(tests["numTotalTests"])
+            res.passed = count(tests["numPassedTests"])
+            res.failed = count(tests["numFailedTests"])
+            res.skipped = count(tests["numPendingTests"]) + count(tests.get("numTodoTests", 0))
+            res.errors = count(tests.get("numRuntimeErrorTestSuites", 0))
+            if res.total != res.passed + res.failed + res.skipped:
+                raise ValueError("Inconsistent test counts")
+            for suite in tests["testResults"]:
+                for case in suite["assertionResults"]:
+                    if case.get("status") == "failed" and len(res.failures) < 25:
+                        res.failures.append({"test": case.get("fullName", case.get("title", "")),
+                                             "type": "failure",
+                                             "message": "\n".join(case.get("failureMessages", []))[:400]})
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            res.reason = "Missing or malformed JavaScript test report"
+            return res
+        try:
+            data = report("coverage-final.json")
+            covered = 0
+            total = 0
+            files: dict[str, float] = {}
+            missing: dict[str, list[int]] = {}
+            statements: dict[str, int] = {}
+            missing_counts: dict[str, int] = {}
+            for filename, meta in data.items():
+                path = Path(filename)
+                if path.is_absolute():
+                    path = path.relative_to("/work")
+                if ".." in path.parts or path.as_posix() in files:
+                    raise ValueError("Invalid coverage path")
+                filename = path.as_posix()
+                if not isinstance(meta["s"], dict) or set(meta["s"]) != set(meta["statementMap"]):
+                    raise ValueError("Inconsistent statement map")
+                lines: dict[int, int] = {}
+                for statement, hits in meta["s"].items():
+                    line = count(meta["statementMap"][statement]["start"]["line"])
+                    if line == 0:
+                        raise ValueError("Invalid line number")
+                    # Istanbul line coverage uses statement start lines and max hits per line.
+                    lines[line] = max(lines.get(line, 0), count(hits))
+                if not lines:
+                    continue
+                uncovered = sorted(line for line, hits in lines.items() if hits == 0)
+                measured = len(lines)
+                hit = measured - len(uncovered)
+                total += measured
+                covered += hit
+                files[filename] = round(100 * hit / measured, 1)
+                missing[filename] = uncovered[:400]
+                statements[filename] = measured
+                missing_counts[filename] = len(uncovered)
+            if not total:
+                raise ValueError("No executable source lines measured")
+            res.total_lines, res.covered_lines = total, covered
+            res.coverage_percent = round(100 * covered / total, 1)
+            res.coverage_files, res.missing_lines = files, missing
+            res.statements, res.missing_counts = statements, missing_counts
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            res.reason = "Missing, malformed, or empty JavaScript coverage report"
+            return res
+        if code is None:
+            res.reason = "JavaScript test execution timed out"
+        elif not res.total:
+            res.status, res.reason = "not_executed", "No tests collected"
+        elif res.failed or res.errors:
+            res.status = "failed"
+        elif code != 0:
+            res.reason = "JavaScript test execution failed"
+        else:
+            res.status = "passed"
+        return res
 
     @staticmethod
     def _install_script(work: Path) -> str:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -23,6 +24,7 @@ from typing import Any
 
 from app.adapters.repository.git_repo import RepoWorkspace, run_git
 from app.adapters.scanners.code_metrics import is_test_path
+from app.adapters.scanners.languages import LANGUAGES
 from app.adapters.scanners.manifests import unified_diff
 from app.adapters.scanners.terraform import TfResource
 from app.agents.base import AgentContext, BaseAgent
@@ -98,12 +100,17 @@ PROTECTED_PATHS = re.compile(r"(^|/)(\.git|\.github/workflows|\.gitlab-ci\.yml|J
                              r"id_rsa[^/]*|\.npmrc|\.pypirc)$|(^|/)\.git/")
 MANIFESTS = {"requirements.txt", "pyproject.toml", "package.json", "go.mod", "requirements-dev.txt",
              "requirements-test.txt", "requirements_dev.txt", "test-requirements.txt"}
+# Source extensions SkyForge is allowed to add test files in, across every language in the registry.
+TEST_FILE_EXTS = {ext for spec in LANGUAGES.values() for ext in spec.exts if spec.id not in ("terraform", "shell")}
+# Generated suites may ship fixture data alongside the tests; the `dir` rule keeps it inside a test root.
+TEST_DATA_EXTS = {".json", ".yml", ".yaml"}
 KIND_RULES: dict[str, dict[str, Any]] = {
     "dependency_upgrade": {"exts": None, "new_files": False},
-    "test_addition": {"exts": {".py"}, "new_files": True, "dir": re.compile(r"^(tests?|skyforge_tests)/")},
-    "functional_test": {"exts": {".py", ".js", ".ts"}, "new_files": True,
-                        "dir": re.compile(r"^(tests?|skyforge_tests)/")},
-    "refactor": {"exts": {".py"}, "new_files": False},
+    "test_addition": {"exts": TEST_FILE_EXTS | TEST_DATA_EXTS, "new_files": True,
+                      "dir": re.compile(r"^(tests?|spec|skyforge_tests|src/test)/")},
+    "functional_test": {"exts": TEST_FILE_EXTS | TEST_DATA_EXTS, "new_files": True,
+                        "dir": re.compile(r"^(tests?|spec|skyforge_tests|src/test)/")},
+    "refactor": {"exts": {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}, "new_files": False},
     "config_fix": {"exts": {".py", ".js", ".ts", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ".tf"},
                    "new_files": False},
     "iac_change": {"exts": {".tf"}, "new_files": False},
@@ -229,7 +236,12 @@ class PolicyEngine:
                 elif exts is not None and Path(path).suffix not in exts:
                     bad_paths.append(f"{path} (extension not allowed for {kind})")
                 if rules.get("dir") and not rules["dir"].search(path):
-                    bad_paths.append(f"{path} (generated tests must live under tests/)")
+                    # Python tests must live under a test root; other languages may use their own idiomatic layout
+                    # (Go's colocated *_test.go, Maven's src/test/java, RSpec's spec/, …) provided the file name
+                    # itself is unambiguously a test file.
+                    if Path(path).suffix == ".py" or not is_test_path(path):
+                        bad_paths.append(f"{path} (generated tests must live under tests/ or follow the language's "
+                                         f"test-file naming convention)")
                 if f["is_new"] and not rules["new_files"]:
                     bad_paths.append(f"{path} (new files not allowed for {kind})")
                 if not f["is_new"] and not target.exists():
@@ -266,7 +278,7 @@ class PolicyEngine:
         apply_ok, apply_detail, syntax = self._apply_and_parse(p.diff, files)
         checks.append(_check("applies_cleanly", apply_ok, apply_detail))
         checks.append(_check("syntax_valid", apply_ok and all(s[1] for s in syntax),
-                             "; ".join(f"{f}: {'ok' if ok else msg}" for f, ok, msg in syntax)[:500] or "n/a"))
+                             "; ".join(f"{f}: {msg}" for f, _ok, msg in syntax)[:500] or "n/a"))
         return self._result(checks, p)
 
     @staticmethod
@@ -277,6 +289,7 @@ class PolicyEngine:
     def _apply_and_parse(self, diff: str, files: list[dict[str, Any]]) -> tuple[bool, str, list[tuple[str, bool, str]]]:
         tmp = Path(tempfile.mkdtemp(prefix="skyforge-policy-"))
         try:
+            baseline: dict[str, bool] = {}
             for f in files:
                 if f["is_new"]:
                     continue
@@ -284,6 +297,9 @@ class PolicyEngine:
                 dst = tmp / f["path"]
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(src, dst)
+                # A file that already fails its syntax/format check cannot be made to pass by a one-line codemod,
+                # so the check is differential: only a *regression* caused by this patch is a policy failure.
+                baseline[f["path"]] = syntax_check(dst)[0]
             run_git(["init", "-q"], cwd=tmp)
             (tmp / ".sf.patch").write_text(diff if diff.endswith("\n") else diff + "\n", encoding="utf-8")
             try:
@@ -293,11 +309,16 @@ class PolicyEngine:
                 return False, str(exc)[:300], []
             results = []
             for f in files:
-                path = tmp / f["path"]
-                results.append((f["path"], *syntax_check(path)))
+                ok, detail = syntax_check(tmp / f["path"])
+                if not ok and not baseline.get(f["path"], True):
+                    ok, detail = True, f"pre-existing syntax errors, not introduced by this patch ({detail})"
+                results.append((f["path"], ok, detail))
             return True, "git apply --check succeeded", results
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 
 def syntax_check(path: Path) -> tuple[bool, str]:
@@ -310,16 +331,26 @@ def syntax_check(path: Path) -> tuple[bool, str]:
         elif path.suffix == ".toml":
             tomllib.loads(text)
         elif path.suffix == ".tf" and shutil.which("terraform"):
-            r = subprocess.run(["terraform", "fmt", "-check=false", "-write=false", "-"], input=text,
-                               capture_output=True, text=True, timeout=30, check=False)
+            r = subprocess.run(["terraform", "fmt", "-check=false", "-write=false", "-no-color", "-"], input=text,
+                               capture_output=True, text=True, timeout=30, check=False,
+                               env={**os.environ, "TF_CLI_ARGS": "", "NO_COLOR": "1"})
             if r.returncode != 0:
-                return False, r.stderr.strip()[:200]
+                return False, _tf_error(r.stderr)
         elif path.suffix == ".tf":
             if text.count("{") != text.count("}"):
                 return False, "unbalanced braces"
         return True, "ok"
     except (SyntaxError, ValueError, tomllib.TOMLDecodeError, OSError) as exc:
         return False, f"{type(exc).__name__}: {exc}"[:200]
+
+
+def _tf_error(stderr: str) -> str:
+    """Terraform frames diagnostics in box-drawing characters and ANSI colour; reduce it to the error text."""
+    clean = ANSI_ESCAPE.sub("", stderr)
+    lines = [ln.strip().lstrip("│╷╵").strip() for ln in clean.splitlines()]
+    messages = [ln for ln in lines if ln.startswith("Error:")]
+    return "; ".join(dict.fromkeys(messages))[:200] or " ".join(ln for ln in lines if ln)[:200] or "terraform fmt failed"
+
 
 
 # ---------------------------------------------------------------- remediation codemods
@@ -337,25 +368,102 @@ def _codemod_line(ws: RepoWorkspace, rel: str, line_no: int, transform: Any) -> 
     return unified_diff(rel, text, "".join(lines))
 
 
-def code_fix(ws: RepoWorkspace, rule_id: str, rel: str, line_no: int) -> ProposalDraft | None:
-    fixes = {
-        "py-yaml-load": (lambda ln: re.sub(r"\byaml\.load\(", "yaml.safe_load(", ln)
-                         .replace(", Loader=yaml.Loader", "").replace(", Loader=yaml.FullLoader", ""),
-                         "Use yaml.safe_load"),
-        "py-tls-verify-off": (lambda ln: re.sub(r",\s*verify\s*=\s*False", "", ln), "Re-enable TLS verification"),
-        "py-flask-debug": (lambda ln: re.sub(r"debug\s*=\s*True", "debug=False", ln), "Disable debug mode"),
-        "py-shell-true": (lambda ln: ln if "[" not in ln else re.sub(r"shell\s*=\s*True", "shell=False", ln),
-                          "Disable shell=True"),
-    }
-    if rule_id not in fixes:
+def _insert_imports(lines: list[str], text: str, modules: tuple[str, ...]) -> None:
+    """Insert `import <module>` for each module not already imported, above the first existing import."""
+    missing = [m for m in modules if not re.search(rf"(?m)^import {m}\b|^from {m} import|^import {m},", text)]
+    if not missing:
+        return
+    insert_at = 0
+    for i, ln in enumerate(lines):
+        if ln.startswith(("import ", "from ")):
+            insert_at = i
+            break
+        if ln.strip() and not ln.startswith(("#", '"""', "'''")) and i > 0:
+            break
+    for offset, module in enumerate(sorted(missing)):
+        lines.insert(insert_at + offset, f"import {module}\n")
+
+
+def _os_system_to_subprocess(line: str) -> str | None:
+    """`os.system("cmd")` as a bare statement → `subprocess.run(shlex.split("cmd"), check=False)`.
+
+    Assignment forms are skipped: os.system returns an encoded wait status, subprocess.run a CompletedProcess.
+    """
+    m = re.match(r"^(\s*)os\.system\((.+)\)\s*$", line.rstrip("\n"))
+    if not m or m.group(2).count("(") != m.group(2).count(")"):
         return None
-    fn, title = fixes[rule_id]
-    diff = _codemod_line(ws, rel, line_no, fn)
+    return f"{m.group(1)}subprocess.run(shlex.split({m.group(2)}), check=False)\n"
+
+
+@dataclass(frozen=True)
+class _CodeFix:
+    transform: Any
+    title: str
+    summary: str
+    imports: tuple[str, ...] = ()
+    breaking: bool = False
+
+
+CODE_FIXES: dict[str, _CodeFix] = {
+    "py-yaml-load": _CodeFix(
+        lambda ln: re.sub(r"\byaml\.load\(", "yaml.safe_load(", ln)
+        .replace(", Loader=yaml.Loader", "").replace(", Loader=yaml.FullLoader", ""),
+        "Use yaml.safe_load", "safe_load refuses arbitrary Python object construction."),
+    "py-tls-verify-off": _CodeFix(
+        lambda ln: re.sub(r",\s*verify\s*=\s*False", "", ln), "Re-enable TLS verification",
+        "Restores certificate validation. Requests to hosts with untrusted certificates will now fail.",
+        breaking=True),
+    "py-flask-debug": _CodeFix(
+        lambda ln: re.sub(r"debug\s*=\s*True", "debug=False", ln), "Disable debug mode",
+        "The Werkzeug debugger allows remote code execution when reachable."),
+    "py-shell-true": _CodeFix(
+        lambda ln: ln if "[" not in ln else re.sub(r"shell\s*=\s*True", "shell=False", ln), "Disable shell=True",
+        "Only applied where the command is already an argument list, so no shell parsing is lost."),
+    "py-bind-all": _CodeFix(
+        lambda ln: re.sub(r"""(host\s*=\s*)['"]0\.0\.0\.0['"]""", r'\1"127.0.0.1"', ln), "Bind to localhost",
+        "The service stops listening on every interface. Set the bind address from configuration if it must be "
+        "exposed (behind a load balancer or reverse proxy).", breaking=True),
+    "py-weak-hash": _CodeFix(
+        lambda ln: re.sub(r"hashlib\.(md5|sha1)\(", "hashlib.sha256(", ln), "Use SHA-256 instead of MD5/SHA-1",
+        "MD5 and SHA-1 are collision-broken. Digest length and value change, so any stored or transmitted digests "
+        "must be recomputed (use bcrypt/argon2 for passwords).", breaking=True),
+    "py-eval": _CodeFix(
+        lambda ln: re.sub(r"(?<![.\w])eval\(", "ast.literal_eval(", ln), "Replace eval() with ast.literal_eval()",
+        "literal_eval only parses Python literals, so expressions and attribute access now raise ValueError.",
+        imports=("ast",), breaking=True),
+    "py-os-system": _CodeFix(
+        _os_system_to_subprocess, "Replace os.system() with subprocess.run()",
+        "Runs the command without a shell. shlex.split keeps the existing argument parsing.",
+        imports=("shlex", "subprocess")),
+    "js-inner-html": _CodeFix(
+        lambda ln: None if "dangerouslySetInnerHTML" in ln else re.sub(r"\.innerHTML(\s*)=", r".textContent\1=", ln),
+        "Assign textContent instead of innerHTML",
+        "textContent escapes markup, removing the XSS sink. Intentional HTML rendering must be sanitised instead "
+        "(e.g. DOMPurify).", breaking=True),
+}
+
+
+def code_fix(ws: RepoWorkspace, rule_id: str, rel: str, line_no: int) -> ProposalDraft | None:
+    fix = CODE_FIXES.get(rule_id)
+    if fix is None:
+        return None
+    if fix.imports and not rel.endswith(".py"):
+        return None
+    text = ws.read_text(rel)
+    lines = text.splitlines(keepends=True)
+    if not 0 < line_no <= len(lines):
+        return None
+    new = fix.transform(lines[line_no - 1])
+    if not new or new == lines[line_no - 1]:
+        return None
+    lines[line_no - 1] = new
+    _insert_imports(lines, text, fix.imports)
+    diff = unified_diff(rel, text, "".join(lines))
     if not diff:
         return None
-    return ProposalDraft(kind="config_fix", title=f"{title} in {rel}:{line_no}",
-                         summary="Minimal single-line change generated by a deterministic codemod.", diff=diff,
-                         files=[rel])
+    return ProposalDraft(kind="config_fix", title=f"{fix.title} in {rel}:{line_no}",
+                         summary=f"Deterministic codemod on a single line. {fix.summary}", diff=diff, files=[rel],
+                         breaking=fix.breaking)
 
 
 def secret_fix(ws: RepoWorkspace, rel: str, line_no: int) -> ProposalDraft | None:
@@ -370,20 +478,13 @@ def secret_fix(ws: RepoWorkspace, rel: str, line_no: int) -> ProposalDraft | Non
         return None
     indent, var = m.group(1), m.group(2)
     lines[line_no - 1] = f'{indent}{var} = os.environ.get("{var.upper()}", "")\n'
-    if not re.search(r"(?m)^import os\b|^from os import|^import os,", text):
-        insert_at = 0
-        for i, ln in enumerate(lines):
-            if ln.startswith(("import ", "from ")):
-                insert_at = i
-                break
-            if ln.strip() and not ln.startswith(("#", '"""', "'''")) and i > 0:
-                break
-        lines.insert(insert_at, "import os\n")
+    _insert_imports(lines, text, ("os",))
     diff = unified_diff(rel, text, "".join(lines))
     return ProposalDraft(kind="config_fix", title=f"Move hard-coded secret {var} to environment",
                          summary=f"Reads {var.upper()} from the environment. The exposed value must also be ROTATED — "
                                  "removing it from code does not remove it from git history.", diff=diff, files=[rel],
                          codemod={"type": "secret_env", "file": rel, "line": line_no})
+
 
 
 def iac_fix(ws: RepoWorkspace, res: TfResource, key: str, old_pattern: str, replacement: str,
@@ -396,6 +497,27 @@ def iac_fix(ws: RepoWorkspace, res: TfResource, key: str, old_pattern: str, repl
         return None
     return ProposalDraft(kind="iac_change", title=title, summary="Terraform change; apply through your normal "
                                                                  "plan/review pipeline.", diff=diff, files=[res.file])
+
+
+def iac_fix_block(ws: RepoWorkspace, res: TfResource, pattern: str, replacement: str,
+                  title: str) -> ProposalDraft | None:
+    """Rewrite every match of `pattern` inside one resource block (for settings that come in groups)."""
+    text = ws.read_text(res.file)
+    lines = text.splitlines(keepends=True)
+    if not 0 < res.start_line <= res.end_line <= len(lines):
+        return None
+    block = "".join(lines[res.start_line - 1:res.end_line])
+    new_block, count = re.subn(pattern, replacement, block)
+    if not count:
+        return None
+    lines[res.start_line - 1:res.end_line] = [new_block]
+    diff = unified_diff(res.file, text, "".join(lines))
+    if not diff:
+        return None
+    return ProposalDraft(kind="iac_change", title=title,
+                         summary=f"Terraform change ({count} attribute(s)); apply through your normal "
+                                 "plan/review pipeline.", diff=diff, files=[res.file])
+
 
 
 # ---------------------------------------------------------------- scanning agent
@@ -551,7 +673,11 @@ class SecurityGuardrailsAgent(BaseAgent):
                     proposal=iac_fix(ws, r, "acl", r'"public-read(-write)?"', '"private"',
                                      f"Make {r.address} private"))
             if r.type == "aws_s3_bucket_public_access_block" and re.search(r"block_public_acls\s*=\s*false", body):
-                add(r, "s3-public-access", "high", "S3 public access block disabled", "Set all four flags to true.")
+                add(r, "s3-public-access", "high", "S3 public access block disabled", "Set all four flags to true.",
+                    proposal=iac_fix_block(
+                        ws, r, r"(?m)^(\s*(?:block_public_acls|block_public_policy|ignore_public_acls|"
+                               r"restrict_public_buckets)\s*=\s*)false\b", r"\1true",
+                        f"Block all public access on {r.address}"))
             if r.type in ("aws_db_instance", "aws_rds_cluster"):
                 if r.value("storage_encrypted") in (None, "false"):
                     add(r, "rds-unencrypted", "high", "RDS storage not encrypted", "Set storage_encrypted = true.",
@@ -564,13 +690,20 @@ class SecurityGuardrailsAgent(BaseAgent):
                         proposal=iac_fix(ws, r, "publicly_accessible", r"true", "false",
                                          f"Make {r.address} private"))
             if r.type == "aws_ebs_volume" and r.value("encrypted") in (None, "false"):
-                add(r, "ebs-unencrypted", "medium", "EBS volume not encrypted", "Set encrypted = true.")
+                add(r, "ebs-unencrypted", "medium", "EBS volume not encrypted", "Set encrypted = true.",
+                    proposal=iac_fix(ws, r, "encrypted", r"\bfalse\b", "true",
+                                     f"Encrypt {r.address}") if r.value("encrypted") == "false" else None)
             if r.type in ("aws_iam_policy", "aws_iam_role_policy", "aws_iam_user_policy") and \
                     re.search(r'"?Action"?\s*[:=]\s*"\*"|"Action"\s*:\s*\[\s*"\*"\s*\]', body) and \
                     re.search(r'"?Resource"?\s*[:=]\s*"\*"', body):
                 add(r, "iam-wildcard", "critical", "IAM policy grants *:* permissions", "Apply least privilege.")
             if r.type == "aws_cloudtrail" and r.value("enable_log_file_validation") in (None, "false"):
                 add(r, "cloudtrail-validation", "medium", "CloudTrail log validation disabled",
-                    "Set enable_log_file_validation = true.")
+                    "Set enable_log_file_validation = true.",
+                    proposal=iac_fix(ws, r, "enable_log_file_validation", r"\bfalse\b", "true",
+                                     f"Enable log file validation on {r.address}")
+                    if r.value("enable_log_file_validation") == "false" else None)
             if r.type == "aws_instance" and r.value("associate_public_ip_address") == "true":
-                add(r, "ec2-public-ip", "medium", "EC2 instance gets a public IP", "Place behind a load balancer/NAT.")
+                add(r, "ec2-public-ip", "medium", "EC2 instance gets a public IP", "Place behind a load balancer/NAT.",
+                    proposal=iac_fix(ws, r, "associate_public_ip_address", r"\btrue\b", "false",
+                                     f"Stop assigning a public IP to {r.address}"))

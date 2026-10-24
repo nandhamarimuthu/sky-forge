@@ -21,8 +21,17 @@ from typing import Any
 
 from app.adapters.repository.git_repo import RepoWorkspace
 from app.adapters.sandbox import DockerSandbox, SandboxResult
+from app.adapters.scanners.aws_mocks import MOCK_DIR, AwsMockPlan, mock_files, plan_aws_mocks
 from app.adapters.scanners.code_metrics import FunctionInfo, analyse_python_module, is_test_path, module_name_for
+from app.adapters.scanners.languages import (
+    LANGUAGES,
+    Symbol,
+    inventory_symbols,
+    profile_repository,
+    test_path_for,
+)
 from app.adapters.scanners.manifests import unified_diff
+from app.adapters.scanners.test_scaffold import render_unit_scaffold
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.security_guardrails import scan_generated_code
 from app.schemas.agents import AgentResult, ArtifactDraft, FindingDraft, ProposalDraft, TestRunDraft
@@ -269,14 +278,22 @@ def _suggest_cases(f: FunctionInfo) -> list[str]:
         elif kind == "str":
             hints.append(f"`{a['name']}` = empty string, typical text and text with unexpected characters")
         elif kind in ("list", "dict", "tuple", "set"):
-            hints.append(f"`{a['name']}` = empty and multi-element {kind}")
+            hints.append(f"`{a['name']}` = empty, single-element and multi-element {kind}")
         elif a.get("default") in ("None", None) and a.get("annotation") and "None" in str(a.get("annotation")):
             hints.append(f"`{a['name']}` = None and a populated value")
+        else:
+            hints.append(f"`{a['name']}` = a representative value and one the function should reject")
+    if f.returns and f.returns.replace(" ", "").endswith("|None"):
+        hints.append("both branches of the optional return: a found value and None")
+    if f.is_async:
+        hints.append("await the coroutine with `pytest.mark.asyncio` (or `anyio`) and assert the resolved value")
     if f.complexity >= 5:
         hints.append(f"one case per branch — complexity {f.complexity} implies ~{f.complexity} independent paths")
+    if len(hints) >= 3:
+        hints.append("drive them from a single `@pytest.mark.parametrize` table so adding a case costs one line")
     if not hints:
         hints.append("a happy-path case plus one boundary/error case")
-    return hints[:4]
+    return hints[:5]
 
 
 def module_suggestions(file: str, gaps: list[CoverageGap], cov: float | None, statements: int | None,
@@ -331,31 +348,49 @@ class UnitTestAgent(BaseAgent):
     id = "unit_test"
     name = "Unit Test & Coverage"
     code = "Unit Test & Coverage"
-    description = "Measures coverage in a sandbox and generates validated unit tests for uncovered logic."
-    allowed_tools = frozenset({"repo.read", "static.radon", "sandbox.execute", "llm.generate"})
+    description = ("Measures coverage in a sandbox, generates validated unit tests for uncovered logic in any "
+                   "language, and mocks AWS from the repository's own Terraform.")
+    allowed_tools = frozenset({"repo.read", "static.radon", "sandbox.execute", "llm.generate", "terraform.parse"})
 
     def run(self, ctx: AgentContext) -> AgentResult:
         ws: RepoWorkspace = ctx.tool("repo.read")
         result = AgentResult(agent_id="unit_test", tools_used=["ast", "radon"])
+        profile = profile_repository(ws)
+        ctx.log("Repository languages: " + (", ".join(f"{lang} ({n} file(s))" for lang, n in profile.files.items())
+                                            or "none detected"), data={"profile": profile.as_dict()})
         py_files = [p for p in ws.iter_files({".py"}) if not ws.rel(p).startswith(("docs/", "examples/"))]
         sources = [p for p in py_files if not is_test_path(ws.rel(p)) and p.name not in ("setup.py", "conftest.py")
                    and "migrations" not in ws.rel(p)]
         tests = [p for p in py_files if is_test_path(ws.rel(p))]
-        js_tests = [p for p in ws.iter_files({".js", ".ts", ".jsx", ".tsx"}) if is_test_path(ws.rel(p))]
-        ctx.log(f"Found {len(sources)} Python source files and {len(tests)} Python test files"
-                + (f", {len(js_tests)} JS/TS test files" if js_tests else ""))
+        ctx.progress(0.08, "Language profile complete")
+
+        # AWS mocks are derived from the repo's own Terraform; with no Terraform this step is skipped entirely.
+        aws_plan, aws_artifacts = self._aws_mocks(ctx, ws, result)
+
+        # Every non-Python language gets an inventory + idiomatic, explicitly-pending unit scaffolds.
+        polyglot = self._polyglot(ctx, ws, profile, result)
+        ctx.progress(0.15, "Polyglot inventory complete")
+        js_sources = sum(profile.files.get(language, 0) for language in ("javascript", "typescript"))
+        js_baseline = self._javascript_baseline(ctx, ws, result) if js_sources else None
 
         if not sources:
-            result.notes.append("No Python sources found — coverage measurement is implemented for Python projects; "
-                                "JS/TS projects are inventoried only.")
-            result.metrics = {"source_files": 0, "test_files": len(tests) + len(js_tests)}
+            if js_baseline is None:
+                result.notes.append("No Python or JavaScript/TypeScript sources available for coverage measurement.")
+            result.metrics = {"source_files": js_sources, "test_files": sum(profile.test_files.values()),
+                              "languages": profile.files, "scaffolded_languages": polyglot,
+                              "coverage_before": js_baseline.coverage_percent if js_baseline else None,
+                              "coverage_after": None,
+                              "sandbox_executed": bool(js_baseline and js_baseline.exit_code is not None),
+                              "aws_mock_resources": len(aws_plan.resources) if aws_plan else 0,
+                              "aws_mock_files": len(aws_artifacts)}
+            ctx.progress(1.0, "Unit test analysis complete")
             return result
 
         modules = [analyse_python_module(ws, p) for p in sources]
         functions = [f for m in modules for f in m.functions]
         test_text = "\n".join(ws.read_text(p) for p in tests)
         referenced = {f.name for f in functions if re.search(rf"\b{re.escape(f.name)}\b", test_text)}
-        ctx.progress(0.15, "Source inventory complete")
+        ctx.progress(0.2, "Source inventory complete")
 
         sandbox: DockerSandbox | None = ctx.tool("sandbox.execute") if ctx.has_tool("sandbox.execute") else None
         execute = bool(ctx.options.get("execute_tests", True) and sandbox and sandbox.available())
@@ -500,16 +535,211 @@ class UnitTestAgent(BaseAgent):
                                                   + ".py", content=content, media_type="text/x-python"))
         total_fns = len(functions)
         result.metrics = {
-            "source_files": len(sources), "test_files": len(tests), "functions": total_fns,
+            "source_files": len(sources) + js_sources, "test_files": sum(profile.test_files.values()), "functions": total_fns,
             "functions_referenced_by_tests": len(referenced),
-            "coverage_before": baseline.coverage_percent if baseline else None,
-            "coverage_after": after.coverage_percent if after else None,
+            "coverage_before": self._coverage(baseline, js_baseline),
+            "coverage_after": self._coverage(after, js_baseline) if after else None,
             "tests_generated": sum(m["tests"] for m in gen_meta.values()),
             "sandbox_executed": execute,
             "modules_needing_coverage": len(roadmap),
+            "languages": profile.files,
+            "test_files_by_language": profile.test_files,
+            "scaffolded_languages": polyglot,
+            "untested_languages": profile.untested(),
+            "aws_mock_resources": len(aws_plan.resources) if aws_plan else 0,
+            "aws_mock_services": aws_plan.services if aws_plan else [],
+            "aws_mock_files": len(aws_artifacts),
         }
         ctx.progress(1.0, "Unit test analysis complete")
         return result
+
+    @staticmethod
+    def _coverage(*runs: SandboxResult | None) -> float | None:
+        measured = [r for r in runs if r is not None and r.coverage_percent is not None]
+        if not measured:
+            return None
+        if len(measured) == 1:
+            return measured[0].coverage_percent
+        totals = [sum(r.statements.values()) for r in measured]
+        if any(total <= 0 for total in totals):
+            return None  # Combining languages requires actual line counts, not an unweighted mean.
+        return round(sum((r.coverage_percent or 0) * total for r, total in zip(measured, totals, strict=True))
+                     / sum(totals), 1)
+
+    def _javascript_baseline(self, ctx: AgentContext, ws: RepoWorkspace, result: AgentResult) -> SandboxResult:
+        sandbox = ctx.tool("sandbox.execute") if ctx.has_tool("sandbox.execute") else None
+        if not ctx.options.get("execute_tests", True):
+            baseline = SandboxResult(status="not_executed", framework="javascript",
+                                     reason="Test execution disabled for this scan")
+        elif sandbox is None:
+            baseline = SandboxResult(status="not_executed", framework="javascript",
+                                     reason="Docker sandbox unavailable; JavaScript tests not executed")
+        else:
+            ctx.log("Measuring JavaScript/TypeScript coverage inside the Docker sandbox")
+            baseline = sandbox.run_javascript_tests(ws.root)
+        ctx.check_cancelled()
+        result.test_runs.append(self._run_draft(baseline, "JavaScript baseline (existing tests)", None))
+        if baseline.reason:
+            result.notes.append(baseline.reason)
+            ctx.log(baseline.reason, level="warning")
+        if baseline.status == "error":
+            result.status = "partial"
+        return baseline
+
+    # ---------------------------------------------------------------- AWS mocks from Terraform
+    def _aws_mocks(self, ctx: AgentContext, ws: RepoWorkspace,
+                   result: AgentResult) -> tuple[AwsMockPlan | None, dict[str, str]]:
+        """Derive moto fixtures from the repository's Terraform. Returns (plan, files); both empty when skipped."""
+        if not ctx.has_tool("terraform.parse"):
+            return None, {}
+        try:
+            resources = ctx.tool("terraform.parse")(ws)
+        except Exception as exc:  # noqa: BLE001 - never fail a scan because HCL could not be parsed
+            ctx.log(f"Terraform parse failed ({type(exc).__name__}) — skipping AWS mock generation", level="warning")
+            return None, {}
+        if not resources:
+            ctx.log("No Terraform in this repository — skipping AWS mock generation")
+            return None, {}
+        region = ((ctx.project.get("aws") or {}).get("regions") or [None])[0]
+        plan = plan_aws_mocks(resources, region=region)
+        if not plan:
+            ctx.log(f"Terraform declares {len(resources)} resource(s) but none map to a mockable AWS service "
+                    f"({', '.join(sorted(plan.skipped_types))}) — skipping AWS mock generation")
+            return plan, {}
+        files = mock_files(plan)
+        unsafe = [rel for rel, content in files.items() if rel.endswith(".py") and scan_generated_code(content)]
+        for rel in unsafe:
+            files.pop(rel)
+        if unsafe or not files:
+            ctx.log("Generated AWS mocks failed the guardrail scan — discarded", level="warning")
+            return plan, {}
+        ctx.log(f"Generated mock AWS data for {len(plan.resources)} Terraform resource(s) across "
+                f"{len(plan.services)} service(s): {', '.join(plan.services)}")
+        for rel, content in files.items():
+            result.artifacts.append(ArtifactDraft(
+                kind="test_file", name=rel.split("/")[-1], content=content,
+                media_type="application/json" if rel.endswith(".json") else "text/x-python"))
+        diff = "".join(unified_diff(rel, "", content).replace(f"--- a/{rel}", "--- /dev/null")
+                       for rel, content in sorted(files.items()))
+        inventory = [{"address": r.address, "service": r.service, "name": r.physical_name,
+                      "terraform": f"{r.file}:{r.line}", "name_is_derived": r.interpolated_name}
+                     for r in plan.resources]
+        derived = [r["address"] for r in inventory if r["name_is_derived"]]
+        recommendation = (
+            f"Install `moto` (`pip install 'moto[all]'`) and add `{MOCK_DIR}/` to the suite. Tests then exercise the "
+            f"real infrastructure shape — {', '.join(plan.services)} — with no AWS account, no credentials and no "
+            "cost. Point application code at the mocked clients by constructing boto3 clients inside the function "
+            "under test (or by injecting them), never at import time."
+            + (f" Terraform computes the names of {', '.join(derived[:5])} from variables, so the mock uses a "
+               "deterministic placeholder — override it if your tests assert on the real name." if derived else "")
+            + (f" {sum(plan.skipped_types.values())} resource type(s) have no moto equivalent and were skipped: "
+               f"{', '.join(sorted(plan.skipped_types))}." if plan.skipped_types else ""))
+        result.findings.append(FindingDraft(
+            rule_id="coverage:aws-mocks", category="coverage", severity="medium",
+            title=f"AWS-dependent code has no mocked fixtures for {len(plan.resources)} Terraform resource(s)",
+            description=f"Terraform declares {len(plan.resources)} resource(s) across {len(plan.services)} service(s) "
+                        f"({', '.join(plan.services)}) but the test suite has no in-memory AWS. SkyForge generated "
+                        f"moto fixtures that mirror those exact resources, so tests never touch a real account.",
+            target=plan.resources[0].file, location={"line": plan.resources[0].line},
+            evidence={"region": plan.region, "services": plan.services, "resources": inventory,
+                      "generated_files": sorted(files), "unsupported_resource_types": plan.skipped_types},
+            recommendation=recommendation, confidence="high", data_source="measured",
+            fingerprint_key="coverage|aws-mocks",
+            proposal=ProposalDraft(
+                kind="test_addition", title=f"Add moto-backed AWS fixtures for {len(plan.resources)} resource(s)",
+                summary=f"Mocks {', '.join(plan.services)} exactly as Terraform declares them, plus smoke tests that "
+                        "fail when Terraform and the fixtures drift apart. Requires moto.",
+                diff=diff, files=sorted(files))))
+        return plan, files
+
+    # ---------------------------------------------------------------- non-Python languages
+    def _polyglot(self, ctx: AgentContext, ws: RepoWorkspace, profile: Any, result: AgentResult) -> list[str]:
+        """Inventory and scaffold tests for every non-Python language present. Returns the languages covered."""
+        covered: list[str] = []
+        limit = int(ctx.options.get("max_scaffolded_languages", 6))
+        for language in profile.languages:
+            if language in ("python", "terraform", "shell") or len(covered) >= limit:
+                continue
+            spec = LANGUAGES.get(language)
+            if spec is None:
+                continue
+            ctx.check_cancelled()
+            by_file: dict[str, list[Symbol]] = {}
+            for path in ws.iter_files(set(spec.exts)):
+                rel = ws.rel(path)
+                if is_test_path(rel) or rel.startswith(("docs/", "examples/", "vendor/")):
+                    continue
+                symbols = inventory_symbols(ws, path, language)
+                if symbols:
+                    by_file[rel] = symbols
+                if len(by_file) >= 200:
+                    break
+            if not by_file:
+                continue
+            tested = profile.test_files.get(language, 0)
+            # Target the files with the most (and most branch-heavy) untested logic first.
+            ranked = sorted(by_file.items(), key=lambda kv: -sum(s.complexity for s in kv[1]))
+            scaffolds: dict[str, str] = {}
+            for rel, symbols in ranked[: int(ctx.options.get("max_generated_tests", 8))]:
+                target = test_path_for(rel)
+                if not target or ws.exists(target):
+                    continue
+                content = render_unit_scaffold(language, rel, symbols, source=ws.read_text(rel))
+                if content:
+                    scaffolds[target] = content
+            total_symbols = sum(len(s) for s in by_file.values())
+            hotspots = sorted((s for syms in by_file.values() for s in syms), key=lambda s: -s.complexity)[:10]
+            proposal = None
+            if scaffolds:
+                diff = "".join(unified_diff(rel, "", content).replace(f"--- a/{rel}", "--- /dev/null")
+                               for rel, content in sorted(scaffolds.items()))
+                proposal = ProposalDraft(
+                    kind="test_addition",
+                    title=f"Add {spec.test_framework} test scaffolds for {len(scaffolds)} {spec.name} file(s)",
+                    summary=f"Idiomatic {spec.test_framework} files with one case per edge condition. Every case is "
+                            f"skipped/pending, so CI stays green until a developer supplies the expectation. "
+                            f"Run with: {spec.runner}",
+                    diff=diff, files=sorted(scaffolds))
+                for rel, content in scaffolds.items():
+                    result.artifacts.append(ArtifactDraft(kind="test_file", name=rel.split("/")[-1], content=content))
+            result.findings.append(FindingDraft(
+                rule_id=f"coverage:language:{language}", category="coverage",
+                severity="high" if not tested and total_symbols >= 20 else ("medium" if not tested else "low"),
+                title=(f"{spec.name}: {total_symbols} function(s) across {len(by_file)} file(s) with "
+                       f"{'no' if not tested else tested} test file(s)"),
+                description=(f"SkyForge inventoried the {spec.name} sources statically (no code executed). "
+                             f"Coverage cannot be measured for {spec.name} in the sandbox, so the ranking below uses "
+                             "branch count per function."),
+                target=ranked[0][0], location={"line": ranked[0][1][0].line},
+                evidence={"language": language, "framework": spec.test_framework, "runner": spec.runner,
+                          "source_files": len(by_file), "test_files": tested, "functions": total_symbols,
+                          "scaffolds": sorted(scaffolds),
+                          "start_with": [{"function": s.qualname, "file": s.file, "line": s.line,
+                                          "branches": s.complexity} for s in hotspots]},
+                recommendation=self._language_advice(spec, hotspots, tested, scaffolds),
+                confidence="medium", data_source="estimated", fingerprint_key=f"coverage|lang|{language}",
+                proposal=proposal))
+            covered.append(language)
+            ctx.log(f"{spec.name}: {total_symbols} function(s), {len(scaffolds)} {spec.test_framework} scaffold(s)")
+        return covered
+
+    @staticmethod
+    def _language_advice(spec: Any, hotspots: list[Symbol], tested: int, scaffolds: dict[str, str]) -> str:
+        lines = [f"Add {spec.test_framework} tests for {spec.name} and run them with `{spec.runner}`. "
+                 f"Work top-down — this list is ordered by branch count, which is where defects concentrate:"]
+        for i, s in enumerate(hotspots[:5], 1):
+            args = ", ".join(s.params) or "no arguments"
+            lines.append(f"{i}. `{s.qualname}` ({s.file}:{s.line}, ~{s.complexity} branch(es), takes {args}) — "
+                         f"cover the happy path, an empty/zero input, a boundary value"
+                         + (" and one case per remaining branch." if s.complexity >= 5 else " and one failure case."))
+        if scaffolds:
+            lines.append(f"SkyForge generated {len(scaffolds)} scaffold file(s) with those cases already named and "
+                         f"marked pending — fill in the expectations and remove the skip markers. Assertion style: "
+                         f"`{spec.assert_style}`.")
+        if not tested:
+            lines.append(f"There is no {spec.name} test suite yet: add `{spec.runner}` to CI in the same change so "
+                         "coverage cannot regress silently.")
+        return "\n".join(lines)
 
     @staticmethod
     def _roadmap_finding(roadmap: list[dict[str, Any]], baseline: SandboxResult | None,
@@ -556,7 +786,7 @@ class UnitTestAgent(BaseAgent):
     @staticmethod
     def _run_draft(r: SandboxResult, label: str, before: float | None) -> TestRunDraft:
         status = r.status if r.status in ("passed", "failed", "error", "not_executed") else "error"
-        return TestRunDraft(kind="unit", framework="pytest", status=status,  # type: ignore[arg-type]
+        return TestRunDraft(kind="unit", framework=r.framework, status=status,  # type: ignore[arg-type]
                             total=r.total, passed=r.passed, failed=r.failed, errors=r.errors, skipped=r.skipped,
                             coverage_before=before, coverage_after=r.coverage_percent, duration_s=r.duration_s,
                             details={"label": label, "reason": r.reason, "failures": r.failures[:15],

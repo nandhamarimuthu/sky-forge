@@ -219,11 +219,11 @@ class ScanOrchestrator:
     def _tools(self, snapshot: dict[str, Any], ws: RepoWorkspace) -> dict[str, Any]:
         settings = self.settings
 
-        def aws_factory(hints: list[dict] | None = None) -> Any:
+        def aws_factory(hints: list[dict] | None = None, terraform: list[Any] | None = None) -> Any:
             with session_scope() as db:
                 proj = db.get(Project, snapshot["id"])
                 account = proj.cloud_account if proj else None
-                return build_aws_adapter(settings, account, hints)
+                return build_aws_adapter(settings, account, hints, terraform)
 
         return {"repo.read": ws, "osv.query": self.osv, "manifest.patch": upgrade_patch,
                 "sandbox.execute": self.sandbox, "static.ruff": True, "static.radon": True,
@@ -268,7 +268,10 @@ class ScanOrchestrator:
                     emit("agent.log", f"Transient error ({type(exc).__name__}); retrying", level="warning")
                     time.sleep(2)
 
-        pool = ThreadPoolExecutor(max_workers=min(4, len(agent_ids)), thread_name_prefix=f"agents-{scan_id[-6:]}")
+        # One worker per agent: agents are I/O-bound (Docker, OSV, git) and a smaller pool made the last agent
+        # wait for a free slot, inflating wall-clock scan time for no benefit.
+        pool = ThreadPoolExecutor(max_workers=max(1, min(8, len(agent_ids))),
+                                  thread_name_prefix=f"agents-{scan_id[-6:]}")
         futures: dict[str, Future[AgentResult]] = {a: pool.submit(execute, a) for a in agent_ids}
         deadline = time.monotonic() + self.settings.agent_timeout_s
         for agent_id, fut in futures.items():

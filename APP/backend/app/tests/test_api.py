@@ -224,15 +224,15 @@ def test_end_to_end_scan_review_and_remediation(client, monkeypatch):
     assert dl.status_code == 200 and dl.headers["x-content-type-options"] == "nosniff"
 
     cost = client.get(f"/api/v1/projects/{pid}/aws/cost", headers=VIEWER).json()
-    assert cost["mode"] == "dump" and cost["simulated"] is False and cost["measured_spend"] is True
-    assert cost["source"]["dump"] == "demo-shop" and cost["daily_total"] and cost["estimated_monthly_savings"] > 0
+    assert cost["mode"] == "dump" and cost["simulated"] is True and cost["measured_spend"] is False
+    assert cost["source"]["source"] == "terraform" and cost["daily_total"] and cost["estimated_monthly_savings"] > 0
     res = client.get(f"/api/v1/projects/{pid}/aws/resources", headers=VIEWER).json()
     assert res["items"] and any(i["iac_address"] == "aws_instance.api" for i in res["items"])
     quality = client.get(f"/api/v1/projects/{pid}/quality", headers=VIEWER).json()
     assert quality["metrics"]["max_complexity"] >= 15
 
     dash = client.get("/api/v1/dashboard/summary", headers=VIEWER).json()
-    assert dash["projects"] >= 1 and dash["open_total"] > 0 and dash["spend_simulated"] is False and dash["spend_30d"] > 1000
+    assert dash["projects"] >= 1 and dash["open_total"] > 0 and dash["spend_simulated"] is True and dash["spend_30d"] > 0
 
     agents = client.get("/api/v1/agents", headers=VIEWER).json()
     assert len(agents) == 6
@@ -303,3 +303,29 @@ def test_reset_clears_all_data_admin_only(client, settings):
     assert not (settings.workspaces_dir / "leftover").exists()
     # Only the reset itself remains in the audit trail.
     assert [e["action"] for e in client.get("/api/v1/audit", headers=ADMIN).json()["items"]] == ["platform.reset"]
+
+
+def test_github_app_installation_token(settings, monkeypatch):
+    """App auth mints and caches an installation token and derives push rights from installation grants."""
+    from app.services import github_app
+
+    github_app.reset_cache()
+    monkeypatch.setattr(settings, "github_app_id", "5451298")
+    monkeypatch.setattr(settings, "github_app_installation_id", "174709599")
+    monkeypatch.setattr(github_app, "app_jwt", lambda s: "signed.jwt")
+    calls: list[str] = []
+
+    def fake_call(s, method, path, bearer, ok):
+        calls.append(f"{method} {path}")
+        assert bearer == "signed.jwt"
+        if path.endswith("/access_tokens"):
+            return {"token": "ghs_" + "y" * 36, "expires_at": "2099-01-01T00:00:00Z"}
+        return {"account": {"login": "octo"}, "permissions": {"contents": "write", "pull_requests": "write"}}
+
+    monkeypatch.setattr(github_app, "_call", fake_call)
+    token, login = github_app.installation_auth(settings)
+    assert token.startswith("ghs_") and login == "octo"
+    assert github_app.can_push(settings) is True
+    github_app.installation_auth(settings)
+    assert len(calls) == 2  # second resolution served from cache
+    github_app.reset_cache()

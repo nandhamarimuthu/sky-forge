@@ -177,7 +177,7 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
   const vchecks = p.verification?.checks ?? [];
   const fixable = ["validated", "declined", "rejected_by_policy", "approved"].includes(p.status);
   const fixBlocked = !health?.github_publish
-    ? `Set ${health?.github_token_env ?? "GITHUB_TOKEN"} on the server — SkyForge needs a GitHub token to push the branch and open the pull request.`
+    ? `Configure a GitHub App or ${health?.github_token_env ?? "GITHUB_TOKEN"} on the server to push the branch and open the pull request.`
     : null;
   return (
     <div className="card" style={{ padding: 18 }}>
@@ -241,7 +241,7 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
                   onSuccess: () => toast("Fixing: applying, verifying in the sandbox, then opening a draft PR…", "var(--cobalt)"),
                   onError: (e) => toast(errMsg(e), "var(--tomato)"),
                 })}>
-                {fix.isPending ? "Fixing…" : "Fix & open PR"}
+                {fix.isPending ? "Fixing…" : p.status === "rejected_by_policy" ? "Recheck, fix & open PR" : "Fix & open PR"}
               </button>
             </span>
           </Tooltip>
@@ -260,7 +260,7 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
         )}
         {p.status === "applying" && <span className="row"><span className="spinner" /> Applying &amp; verifying…</span>}
         {["verified", "applied"].includes(p.status) && p.branch && !pr && (
-          <Tooltip title={health?.github_publish ? "Pushes the fix branch and opens a draft pull request on GitHub" : "Set GITHUB_TOKEN on the server to enable"}>
+          <Tooltip title={health?.github_publish ? "Pushes the fix branch and opens a draft pull request on GitHub" : "Configure a GitHub App or GITHUB_TOKEN on the server to enable"}>
             <span>
               <button className="btn btn-primary btn-sm" disabled={openPr.isPending || !health?.github_publish}
                 onClick={() => openPr.mutate(p.id, { onSuccess: (r) => toast(`Draft PR #${r.number} opened in ${r.repo}`, "var(--teal)"), onError: (e) => toast(errMsg(e), "var(--tomato)") })}>

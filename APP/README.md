@@ -6,31 +6,35 @@ validated fixes, and present everything in one dashboard. Built to [skill.md](sk
 | Agent | What it really does | Tools it may use |
 |---|---|---|
 | 1 · Vulnerability Remediation | Parses `requirements*.txt`, `pyproject.toml`, `package.json`(+lock), `go.mod`; queries **OSV.dev**; proposes the minimal fixed version as a one-line diff; flags major bumps | repo.read, osv.query, manifest.patch |
-| 2 · Unit Test & Coverage | Runs the existing suite with coverage in the **Docker sandbox**, then generates tests for uncovered pure functions (LLM-drafted when Ollama is up, otherwise sandbox-observed *characterization* tests). Only passing tests are proposed | repo.read, static.radon, sandbox.execute, llm.generate |
+| 2 · Unit Test & Coverage | Measures Python and JavaScript/TypeScript coverage in the **Docker sandbox** using pytest or the repo's Jest/Vitest runner. Python generation uses LLM/characterization tests; JS/TS scaffolds remain reviewable, unexecuted proposals | repo.read, static.radon, sandbox.execute, llm.generate |
 | 3 · Functional Automation | Infers FastAPI/Flask/Express routes, generates journey suites (success, malformed input, auth, 404/405) and runs them in-process in the sandbox; failures become findings | repo.read, sandbox.execute |
-| 4 · AWS Cost Optimiser | Read-only inventory, metrics and cost → idle/oversized EC2 & RDS, unattached EBS, old snapshots, idle NAT/ELB, Lambda arm64, S3 tiering, z-score cost anomalies; Terraform patches when the resource is in the repo | repo.read, terraform.parse, aws.read |
-| 5 · Code Health | Radon complexity/MI, Ruff lint, duplication, git churn hotspots; proposes Ruff *safe* fixes as a diff | repo.read, static.ruff, static.radon |
+| 4 · AWS Cost Optimiser | Inventory and cost model generated only from the repo's Terraform → idle/oversized EC2 & RDS, unattached EBS, old snapshots, idle NAT/ELB, Lambda arm64, S3 tiering; Terraform patches when available | repo.read, terraform.parse, aws.read |
+| 5 · Code Health | Radon complexity/MI, Ruff lint, duplication, git churn hotspots; proposes Ruff safe fixes, unused CommonJS binding cleanup, and supported identical aggregation extraction as PR-ready diffs | repo.read, static.ruff, static.radon |
 | 6 · Security Guardrails | Secret scanning, dangerous code patterns, Dockerfile/CI/Terraform policies — **and** a deterministic policy engine that validates every proposed change | repo.read, terraform.parse |
 
 **What is real:** repository cloning, OSV lookups, Ruff/Radon, Docker test execution, LLM test drafting and
 explanations (Ollama `gemma3` or OpenAI `gpt-4o-mini` via CrewAI — switch providers in Settings), patch
 validation and remediation.
 
-**AWS cost data (`AWS_MODE=dump`, default):** the optimiser reads a **one-month data dump** in the native export
-formats — a Cost & Usage Report CSV (`lineItem/*` columns), AWS CLI `describe-*` JSON and CloudWatch daily
-metrics. Spend figures are therefore *measured* from the dump, not simulated. Three realistic sample dumps ship in
-`fixtures/aws/` (`demo-shop`, `orders-api`, `shared-platform`; 30 days, 2026-09-22 → 2026-10-21). To use your own
-account run `scripts/export_aws_dump.sh` (read-only CLI calls; optional `CUR_CSV=path` to use a real CUR file,
-otherwise Cost Explorer daily data is converted), zip the folder and upload it on the AWS page
-(`POST /projects/{id}/aws/dump`). `AWS_MODE=live` (read-only boto3) is also available. There is no synthetic data:
-the database starts empty and every project, scan, finding and test run is produced by a real scan.
+**AWS cost data: repository Terraform only.** On every analysis the optimiser generates its own dump from the
+current scanned repository. Existing sample/upload selections and legacy `AWS_MODE=live` settings are ignored;
+there is no fallback to external data. Upload and sample-selection endpoints are disabled. Supported declarations:
+`aws_instance`, `aws_ebs_volume`/`root_block_device`, `aws_db_instance`, `aws_nat_gateway`, `aws_lb`,
+`aws_lambda_function`, `aws_s3_bucket` and snapshot declared in the repo becomes inventory, with utilisation and a
+CUR modelled deterministically from the declared sizing and list prices. Such a dump sets `simulated: true` in its
+manifest, so the UI and every finding are labelled as estimates rather than measurements — and because each
+resource carries its Terraform address, the resulting rightsizing / gp2→gp3 / arm64 recommendations come with a
+ready-to-review `.tf` patch. No supported resources means an empty inventory and an explicit message, not a sample
+account. Generated files are isolated by project and Terraform fingerprint, so changed/removed resources cannot
+reuse another revision's inventory. Re-scan existing projects to replace old findings; the AWS page excludes
+recommendations from external dumps or a different Terraform fingerprint.
 
-| Dump file | Source command |
+| Generated file | Source |
 |---|---|
 | `manifest.json` | account, region, period, project tag |
-| `cost_and_usage.csv` | CUR (or converted `ce get-cost-and-usage --granularity DAILY`) |
-| `ec2_instances.json`, `ebs_volumes.json`, `ebs_snapshots.json`, `rds_instances.json`, `nat_gateways.json`, `load_balancers.json`, `lambda_functions.json`, `s3_buckets.json` | `aws ec2/rds/elbv2/lambda/s3api describe-*/list-*` |
-| `cloudwatch_metrics.json` | `aws cloudwatch get-metric-statistics --period 86400` (CPU, connections, bytes, requests…) |
+| `cost_and_usage.csv` | Modelled cost for declared resources, using approximate list prices |
+| `ec2_instances.json`, `ebs_volumes.json`, `ebs_snapshots.json`, `rds_instances.json`, `nat_gateways.json`, `load_balancers.json`, `lambda_functions.json`, `s3_buckets.json` | Supported Terraform resource declarations only |
+| `cloudwatch_metrics.json` | Simulated utilisation assumptions, not observed AWS metrics |
 
 ## Quick start
 
@@ -59,14 +63,13 @@ templates and tests to the sandbox-observed characterization strategy.
 | `fixture:demo-shop` | Flask shop + Express storefront, Terraform, Dockerfile, GitHub Actions | vulnerable pins (requests, urllib3, flask, lodash, axios, express), hard-coded AWS key, `yaml.load`, `verify=False`, `shell=True`, `innerHTML`, open SG, public S3/RDS, CI script injection, complex untested functions |
 | `fixture:orders-api` | FastAPI orders service, Terraform (EC2 + 2×RDS), Dockerfile, GitHub Actions | vulnerable pins (fastapi 0.95, starlette, python-multipart, jinja2, cryptography, PyJWT…), hard-coded secrets, SQL f-string injection, pickle/yaml, broken refund authorisation, divide-by-zero report endpoint, `pull_request_target` workflow, oversized/unencrypted/public RDS |
 
-Each has a matching AWS dump (Name tags such as `demo-shop-api` / RDS identifiers link usage to the Terraform
-resources, so rightsizing findings come with an IaC patch). Regenerate dumps with
-`.venv/bin/python scripts/build_sample_aws_dumps.py`.
+Each repository's Terraform is used to generate its AWS model at scan time, with addresses linking recommendations
+back to IaC patches. Legacy files in `fixtures/aws/` are retained for adapter tests only; the optimiser never selects them.
 
 ### Demo workflow (no AWS credentials needed)
 
 1. **Add services** → pick a sample (`fixture:demo-shop`, `fixture:orders-api`) or any public GitHub repo, e.g.
-   `https://github.com/we45/Vulnerable-Flask-App`, and choose the AWS cost data dump.
+   `https://github.com/we45/Vulnerable-Flask-App`. AWS cost data is generated from that repository's Terraform.
 2. Open the project → **Run scan**. Watch live progress and agent logs (Server-Sent Events).
 3. Open a finding → evidence, explanation, the proposed diff and guardrail checks → **Fix & open PR** (one click:
    approve → apply → verify → draft PR), or step through it manually with **Approve fix** →
@@ -77,17 +80,25 @@ resources, so rightsizing findings come with an IaC patch). Regenerate dumps wit
 
 ### Pushing fixes and opening pull requests (GitHub)
 
-Start the server with a GitHub token in `GITHUB_TOKEN` (fine-grained: *Contents* + *Pull requests* read/write,
-plus *Administration* write if you want SkyForge to create repos/forks; or a classic token with `repo`). A per-project
-`token_secret_ref` overrides it. On a verified fix click **Push branch & open PR**:
+SkyForge authenticates to GitHub in one of two ways (first match wins):
+
+1. **GitHub App (preferred).** Set `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY_PATH`
+   (or `GITHUB_APP_PRIVATE_KEY` with the PEM inline). SkyForge signs a short-lived RS256 JWT with the private key and
+   exchanges it for a 1-hour installation token, cached in memory only. Install the app on the target repositories
+   with *Contents: write* and *Pull requests: write*. Installation tokens cannot create repositories or fork, so the
+   sample-repo and fork flows below need a PAT.
+2. **Personal access token** in `GITHUB_TOKEN` (fine-grained: *Contents* + *Pull requests* read/write, plus
+   *Administration* write to create repos/forks; or a classic token with `repo`).
+
+A per-project `token_secret_ref` overrides both. On a verified fix click **Push branch & open PR**:
 
 | Repository | What happens |
 |---|---|
-| You have push access | `skyforge/fix-…` branch pushed, draft PR against the scanned branch |
-| Public repo you don't own | forked to your account, draft PR inside the fork (upstream is never contacted) |
-| Bundled sample (`fixture:`) | private `skyforge-<name>` repo created in your account, base + fix branch pushed, draft PR |
+| You have push access (or the app is installed) | `skyforge/fix-…` branch pushed, draft PR against the scanned branch |
+| Public repo you don't own | forked to your account, draft PR inside the fork (upstream is never contacted) — PAT only |
+| Bundled sample (`fixture:`) | private `skyforge-<name>` repo created in your account, base + fix branch pushed, draft PR — PAT only |
 
-The token is only passed to git through environment config (never in arguments, logs or the DB); every push is
+Credentials are only passed to git through environment config (never in arguments, logs or the DB); every push is
 audited. `POST /api/v1/findings/{id}/pull-request {"proposal_id": …}` is idempotent.
 
 **One-click Fix.** `POST /api/v1/findings/{id}/fix {"proposal_id": …}` runs the whole chain from a single human
@@ -96,6 +107,24 @@ verification, then the draft PR. Nothing is relaxed — a guardrail rejection st
 verification passes (otherwise `verification.pull_request_error` explains why). For a **Unit Test & Coverage**
 finding this means one click generates the tests, proves they pass with measured coverage in the sandbox, and opens
 a draft PR whose body lists the before/after coverage and the functions the new tests now exercise.
+
+**Which findings come with a fix.** Every agent can attach a patch, which then flows through the same
+validate → approve → apply → verify → draft PR pipeline:
+
+| Agent | Change type | Auto-generated fixes |
+|---|---|---|
+| Vulnerability | `dependency_upgrade` | Manifest version bump to the nearest non-vulnerable release |
+| Unit Test & Coverage / Functional Test | `test_addition`, `functional_test` | Generated suites for uncovered code and API journeys |
+| Security Guardrails | `config_fix` | `yaml.load` → `safe_load`, `verify=False`, `debug=True`, `shell=True`, bind `0.0.0.0`, MD5/SHA-1 → SHA-256, `eval()` → `ast.literal_eval()`, `os.system()` → `subprocess.run()`, `innerHTML` → `textContent`, hard-coded secrets → environment |
+| Security Guardrails | `iac_change` | Public S3 ACL/public-access block, unencrypted RDS/EBS, publicly reachable RDS, CloudTrail log validation, EC2 public IP |
+| Code Health | `refactor` | Python: Ruff safe fixes. JS: unused scalar CommonJS bindings (retains `require` evaluation), and exact supported aggregation clones extracted into an existing initialization-free utility. ESM/destructuring and arbitrary duplicate code are left unchanged |
+| AWS Optimizer | `iac_change` | EC2/RDS rightsizing, EBS `gp2` → `gp3`, Lambda `x86_64` → `arm64` |
+
+Patches are capped at 20 files / 2000 changed lines. Rejected proposals offer **Recheck, fix & open PR**:
+approval and publishing still require a fresh passing policy result. Secret-bearing patch context is reconstructed
+from the original scan in memory; stored/UI diffs remain redacted. JS refactors are verified by replaying supported
+transformations against the original commit, not by counting delimiters. Changes that alter behaviour (TLS verification,
+hash algorithm, bind address, `innerHTML`) are flagged `breaking` so reviewers see it before approving.
 
 ## Architecture
 
@@ -169,7 +198,12 @@ cd frontend && npm run build        # tsc + vite
 
 ## Troubleshooting
 
-- *"Docker sandbox unavailable"* — start Docker Desktop; the first sandboxed run pulls `python:3.11-slim`.
+- *"Docker sandbox unavailable"* — start Docker Desktop; the first sandboxed run pulls `python:3.11-slim` or
+  `node:22-slim` (`SANDBOX_NODE_IMAGE`) for JavaScript/TypeScript. JS coverage requires Jest or Vitest in the
+  repository's dependencies. Dependency installation is isolated; tests run without network access. Unavailable
+  coverage stays unknown, never a fabricated percentage. Code Health includes JS source lines in its duplication
+  score; Python-only complexity metrics remain Python-only. Project/dashboard cards retain each agent's latest
+  result when a subsequent scan runs unrelated agents.
 - *LLM offline* — `ollama serve` and `ollama pull gemma3`, or set another model/provider in Settings.
 - *OpenAI "not set"* — paste the key in Settings → Model provider, or export the env var named by
   `OPENAI_API_KEY_ENV` (default `OPENAI_API_KEY`) and restart the API. A key saved in Settings wins over the env var.

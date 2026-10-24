@@ -1,11 +1,12 @@
 """Publish a verified fix: push its isolated branch to GitHub and open a draft pull request.
 
 Only ever triggered by an explicit human action after approval + verification. Never force-pushes, never writes
-to the default branch, and the token is read from the environment (never stored, logged or put on a command line).
-- Repo the token can push to → branch + PR in that repo.
+to the default branch, and the credential is resolved at call time (never stored, logged or put on a command line).
+Auth order: a per-project token secret ref → a configured GitHub App (short-lived installation token) → GITHUB_TOKEN.
+- Repo the credential can push to → branch + PR in that repo.
 - Public repo without push access → fork into the token owner's account, PR inside the fork (upstream maintainers
-  are never contacted automatically).
-- Bundled sample (fixture) repo → private `skyforge-<name>` repo in the token owner's account.
+  are never contacted automatically). PAT only — installation tokens cannot fork.
+- Bundled sample (fixture) repo → private `skyforge-<name>` repo in the token owner's account. PAT only.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from app.models import Approval, Finding, Project, RemediationProposal
 from app.orchestration.orchestrator import workspace_dir
 from app.services.audit import audit
 from app.services.container import Container
+from app.services.github_app import app_configured, can_push, installation_auth
 
 PUBLISHABLE = ("verified", "applied")
 
@@ -55,18 +57,33 @@ class _GitHub:
         raise ApiError(504, "github_timeout", f"Repository {full} did not become available")
 
 
-def _token(c: Container, project: Project) -> str:
-    ref = (project.repository.token_secret_ref if project.repository else None) or c.settings.github_token_env
+def _token(c: Container, project: Project) -> tuple[str, str | None]:
+    """Returns (token, app installation login). A per-repo PAT ref wins; otherwise the GitHub App; otherwise the PAT."""
+    ref = project.repository.token_secret_ref if project.repository else None
     token = secret_from_env(ref)
+    if token:
+        return token, None
+    if app_configured(c.settings):
+        return installation_auth(c.settings)
+    token = secret_from_env(c.settings.github_token_env)
     if not token:
         raise ApiError(422, "github_token_missing",
-                       f"Set {ref} (environment or .env) to a GitHub token with repo + pull request write access "
-                       "to enable pushing branches and opening PRs")
-    return token
+                       f"Configure a GitHub App (GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, "
+                       f"GITHUB_APP_PRIVATE_KEY_PATH) or set {ref or c.settings.github_token_env} to a GitHub token "
+                       "with repo + pull request write access to enable pushing branches and opening PRs")
+    return token, None
 
 
 def publish_enabled(c: Container) -> bool:
-    return bool(secret_from_env(c.settings.github_token_env))
+    return bool(secret_from_env(c.settings.github_token_env)) or app_configured(c.settings)
+
+
+def github_auth_mode(c: Container) -> str:
+    """Which credential the publish flow will use: the GitHub App, a PAT, or nothing."""
+    if app_configured(c.settings):
+        return "app"
+    return "pat" if secret_from_env(c.settings.github_token_env) else "none"
+
 
 
 def _coverage_section(finding: Finding, prop: RemediationProposal) -> list[str]:
@@ -128,11 +145,15 @@ def open_pull_request(db: Session, c: Container, finding: Finding, prop: Remedia
     if not (wt / ".git").exists():
         raise ApiError(409, "workspace_missing", "The fix branch workspace no longer exists; re-apply the fix")
 
-    token = _token(c, project)
+    token, app_login = _token(c, project)
     gh = _GitHub(c.settings.github_api_url, token)
-    login = gh.call("GET", "/user").json()["login"]
+    login = app_login or gh.call("GET", "/user").json()["login"]
     mode: str
     if repo.provider == "local-fixture":
+        if app_login:
+            raise ApiError(422, "github_app_unsupported_flow",
+                           "GitHub App installation tokens cannot create repositories. Set a GITHUB_TOKEN (PAT) to "
+                           "publish bundled sample repositories, or scan a real repository the app is installed on")
         target = f"{login}/skyforge-{repo.name}"
         r = gh.call("GET", f"/repos/{target}", ok=(200, 404))
         if r.status_code == 404:
@@ -142,10 +163,23 @@ def open_pull_request(db: Session, c: Container, finding: Finding, prop: Remedia
         base = f"skyforge/base-{prop.scan_id[-10:]}"
         mode = "sample-repo"
     else:
-        upstream = gh.call("GET", f"/repos/{repo.owner}/{repo.name}").json()
-        if (upstream.get("permissions") or {}).get("push"):
+        r = gh.call("GET", f"/repos/{repo.owner}/{repo.name}", ok=(200, 404))
+        if r.status_code == 404 and app_login:
+            raise ApiError(422, "github_app_no_access",
+                           f"The GitHub App installation cannot see {repo.owner}/{repo.name}. Install the app on that "
+                           "repository (Contents: write, Pull requests: write), or set a GITHUB_TOKEN (PAT)")
+        if r.status_code == 404:
+            raise ApiError(422, "github_repo_not_found", f"{repo.owner}/{repo.name} is not visible to this token")
+        upstream = r.json()
+        # Installation tokens always report all-false repo permissions, so trust the installation grants instead.
+        pushable = can_push(c.settings) if app_login else bool((upstream.get("permissions") or {}).get("push"))
+        if pushable:
             target, base, mode = f"{repo.owner}/{repo.name}", repo.branch or upstream["default_branch"], "direct"
         else:
+            if app_login:
+                raise ApiError(422, "github_app_no_access",
+                               "The GitHub App installation lacks Contents: write and Pull requests: write. Grant "
+                               "those permissions (and accept them on the installation), or set a GITHUB_TOKEN (PAT)")
             fork = gh.call("POST", f"/repos/{repo.owner}/{repo.name}/forks", json={}).json()
             target = fork["full_name"]
             base = gh.wait_for_repo(target)["default_branch"]

@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -18,9 +19,11 @@ from app.core.security import PathEscapeError, is_within, safe_join
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "env", "__pycache__", "dist", "build", ".tox", ".mypy_cache",
              ".pytest_cache", "vendor", "site-packages", ".next", "coverage", ".sf_deps", ".idea", ".vscode",
              "target", ".terraform", "bower_components"}
-LANG_BY_EXT = {".py": "python", ".js": "javascript", ".jsx": "javascript", ".ts": "typescript",
-               ".tsx": "typescript", ".go": "go", ".java": "java", ".rb": "ruby", ".tf": "terraform",
-               ".kt": "kotlin", ".cs": "csharp", ".php": "php", ".rs": "rust"}
+LANG_BY_EXT = {".py": "python", ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
+               ".cjs": "javascript", ".ts": "typescript", ".tsx": "typescript", ".go": "go", ".java": "java",
+               ".rb": "ruby", ".tf": "terraform", ".kt": "kotlin", ".kts": "kotlin", ".cs": "csharp",
+               ".php": "php", ".rs": "rust", ".scala": "scala", ".swift": "swift", ".sh": "shell",
+               ".bash": "shell"}
 _SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 
 
@@ -91,15 +94,17 @@ _SAFE_GIT = ["-c", "core.hooksPath=/dev/null", "-c", "protocol.file.allow=never"
              "-c", "submodule.recurse=false", "-c", "core.fsmonitor=false"]
 
 
-def run_git(args: list[str], cwd: Path | None = None, timeout: int = 60, token: str | None = None) -> str:
+def run_git(args: list[str], cwd: Path | None = None, timeout: int = 60, token: str | None = None, *,
+            preserve_output: bool = False) -> str:
     try:
         res = subprocess.run(["git", *_SAFE_GIT, *args], cwd=cwd, env=_git_env(token), capture_output=True,
-                             text=True, timeout=timeout, check=False)
+                             text=not preserve_output, timeout=timeout, check=False)
     except subprocess.TimeoutExpired as exc:
         raise RepositoryError(f"git {args[0]} timed out after {timeout}s") from exc
     if res.returncode != 0:
-        raise RepositoryError(f"git {args[0]} failed: {res.stderr.strip()[-400:]}")
-    return res.stdout.strip()
+        stderr = res.stderr.decode("utf-8", errors="replace") if preserve_output else res.stderr
+        raise RepositoryError(f"git {args[0]} failed: {stderr.strip()[-400:]}")
+    return res.stdout.decode("utf-8", errors="replace") if preserve_output else res.stdout.strip()
 
 
 def dir_size_mb(path: Path) -> float:
@@ -142,12 +147,19 @@ def materialize(ref: RepoRef, dest: Path, *, branch: str | None, fixtures_dir: P
 
 
 class RepoWorkspace:
-    """Read-only view over a checked-out repository with traversal-safe access."""
+    """Read-only view over a checked-out repository with traversal-safe access.
+
+    The tree is walked once and cached: a scan runs five agents concurrently over the same checkout, and
+    re-walking a large repository per agent (and per file-type filter) dominated scan time.
+    """
 
     MAX_FILE_BYTES = 1_000_000
 
     def __init__(self, root: Path):
         self.root = root.resolve()
+        self._lock = threading.Lock()
+        self._index: list[tuple[Path, int]] | None = None
+        self._text: dict[Path, str] = {}
 
     def path(self, rel: str) -> Path:
         return safe_join(self.root, rel)
@@ -155,34 +167,60 @@ class RepoWorkspace:
     def rel(self, p: Path) -> str:
         return p.resolve().relative_to(self.root).as_posix()
 
+    def _scan(self) -> list[tuple[Path, int]]:
+        """(path, size) for every regular, non-skipped file — computed once per workspace."""
+        if self._index is not None:
+            return self._index
+        with self._lock:
+            if self._index is not None:
+                return self._index
+            index: list[tuple[Path, int]] = []
+            for root, dirs, files in os.walk(self.root):
+                dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".sf_")]
+                for f in files:
+                    p = Path(root) / f
+                    try:
+                        if p.is_symlink() or not is_within(self.root, p):
+                            continue
+                        index.append((p, p.stat().st_size))
+                    except OSError:
+                        continue
+            self._index = index
+            return index
+
     def iter_files(self, exts: set[str] | None = None, names: set[str] | None = None,
                    max_bytes: int | None = None) -> Iterator[Path]:
         limit = max_bytes or self.MAX_FILE_BYTES
-        for root, dirs, files in os.walk(self.root):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not d.startswith(".sf_")]
-            for f in files:
-                p = Path(root) / f
-                if p.is_symlink() or not is_within(self.root, p):
-                    continue
-                if exts is not None and p.suffix.lower() not in exts and (names is None or f not in names):
-                    continue
-                if exts is None and names is not None and f not in names:
-                    continue
-                try:
-                    if p.stat().st_size > limit:
-                        continue
-                except OSError:
-                    continue
-                yield p
+        for p, size in self._scan():
+            if size > limit:
+                continue
+            if exts is not None and p.suffix.lower() not in exts and (names is None or p.name not in names):
+                continue
+            if exts is None and names is not None and p.name not in names:
+                continue
+            yield p
+
+    def invalidate(self) -> None:
+        """Forget the cached tree — call after writing into the workspace."""
+        with self._lock:
+            self._index = None
+            self._text.clear()
 
     def read_text(self, rel_or_path: str | Path) -> str:
         p = rel_or_path if isinstance(rel_or_path, Path) else self.path(rel_or_path)
+        cached = self._text.get(p)
+        if cached is not None:
+            return cached
         if not is_within(self.root, p):
             raise PathEscapeError(str(p))
         if p.stat().st_size > self.MAX_FILE_BYTES:
             raise RepositoryError(f"{p.name} exceeds read size limit")
         # Decode bytes directly so CRLF line endings survive and generated patches match the file on disk.
-        return p.read_bytes().decode("utf-8", errors="replace")
+        text = p.read_bytes().decode("utf-8", errors="replace")
+        with self._lock:
+            if len(self._text) < 3000:
+                self._text[p] = text
+        return text
 
     def exists(self, rel: str) -> bool:
         try:
@@ -197,5 +235,5 @@ class RepoWorkspace:
         return dict(counts.most_common())
 
     def primary_language(self) -> str:
-        langs = {k: v for k, v in self.languages().items() if k != "terraform"}
+        langs = {k: v for k, v in self.languages().items() if k not in ("terraform", "shell")}
         return next(iter(langs), "unknown")

@@ -32,6 +32,19 @@ class TfResource:
         raw = v[0].split("#", 1)[0].strip()
         return raw[1:-1] if raw.startswith('"') and raw.endswith('"') else raw
 
+    def attr_line(self, key: str, expected: str | None = None) -> int | None:
+        """Absolute line of `key = …`, including attributes nested in sub-blocks (e.g. root_block_device).
+
+        Returns None when the attribute is absent or appears more than once, so callers never patch ambiguously.
+        """
+        top = self.attrs.get(key)
+        if top and (expected is None or expected in top[0]):
+            return top[1]
+        pat = re.compile(rf'(?<![A-Za-z0-9_]){re.escape(key)}\s*=\s*(.+?)\s*$')
+        hits = [self.start_line + off for off, line in enumerate(self.body.splitlines())
+                if (m := pat.search(line.split("#", 1)[0])) and (expected is None or expected in m.group(1))]
+        return hits[0] if len(hits) == 1 else None
+
 
 def parse_terraform(ws: RepoWorkspace) -> list[TfResource]:
     out: list[TfResource] = []

@@ -55,8 +55,10 @@ class DumpAwsAdapter:
         self._metrics: dict[str, list[MetricSeries]] | None = None
         self._cur: list[dict[str, str]] | None = None
         self.manifest: dict[str, Any] = self._json("manifest.json") or {}
+        # Dumps modelled from the repository's Terraform declare themselves simulated; real exports do not.
+        self.report.simulated = bool(self.manifest.get("simulated"))
         self.report.meta = {
-            "source": "data dump", "account_id": self.manifest.get("account_id"),
+            "source": self.manifest.get("source") or "data dump", "account_id": self.manifest.get("account_id"),
             "region": self.manifest.get("region"), "period_start": self.manifest.get("period_start"),
             "period_end": self.manifest.get("period_end"), "exported_at": self.manifest.get("exported_at"),
             "description": self.manifest.get("description", ""), "dump": dump_dir.name,
@@ -156,7 +158,14 @@ class DumpAwsAdapter:
                 found = True
         return round(total, 2) if found else None
 
-    def _link(self, tf_type: str, name: str, ident: str | None = None) -> str | None:
+    IAC_TAG = "skyforge:iac-address"
+
+    def _link(self, tf_type: str, name: str, ident: str | None = None,
+              tags: dict[str, str] | None = None) -> str | None:
+        # An explicit address tag (emitted by dumps modelled from Terraform) is authoritative.
+        tagged = (tags or {}).get(self.IAC_TAG)
+        if tagged:
+            return tagged
         for h in self.iac_hints:
             if h.get("type") != tf_type:
                 continue
@@ -181,7 +190,7 @@ class DumpAwsAdapter:
                     i["InstanceId"], "ec2", i.get("Placement", {}).get("AvailabilityZone", region)[:-1] or region,
                     i["InstanceType"], i.get("State", {}).get("Name", "unknown"), name, tags,
                     {"launch_time": i.get("LaunchTime"), "public_ip": bool(i.get("PublicIpAddress"))},
-                    self._cost_for(i["InstanceId"]), self._link("aws_instance", name)))
+                    self._cost_for(i["InstanceId"]), self._link("aws_instance", name, None, tags)))
         for v in (self._json("ebs_volumes.json") or {}).get("Volumes", []):
             tags = _tags(v.get("Tags"))
             if not self._in_scope(tags):
@@ -192,7 +201,8 @@ class DumpAwsAdapter:
                                 {"size_gb": v.get("Size", 0), "created": v.get("CreateTime"),
                                  "attached_to": attached[0] if attached else None,
                                  "encrypted": v.get("Encrypted", False)},
-                                self._cost_for(v["VolumeId"])))
+                                self._cost_for(v["VolumeId"]),
+                                self._link("aws_ebs_volume", tags.get("Name", ""), None, tags)))
         end = self.manifest.get("period_end")
         end_dt = datetime.fromisoformat(end) if end else None
         for s in (self._json("ebs_snapshots.json") or {}).get("Snapshots", []):
@@ -215,14 +225,15 @@ class DumpAwsAdapter:
                                               "storage_gb": db.get("AllocatedStorage"),
                                               "encrypted": db.get("StorageEncrypted"),
                                               "public": db.get("PubliclyAccessible")},
-                                self._cost_for(f"db:{ident}", ident), self._link("aws_db_instance", ident, ident)))
+                                self._cost_for(f"db:{ident}", ident), self._link("aws_db_instance", ident, ident, tags)))
         for n in (self._json("nat_gateways.json") or {}).get("NatGateways", []):
             tags = _tags(n.get("Tags"))
             if not self._in_scope(tags):
                 continue
             res.append(Resource(n["NatGatewayId"], "natgateway", region, "nat-gateway", n.get("State", "unknown"),
                                 tags.get("Name", n["NatGatewayId"]), tags, {"subnet": n.get("SubnetId")},
-                                self._cost_for(n["NatGatewayId"])))
+                                self._cost_for(n["NatGatewayId"]),
+                                self._link("aws_nat_gateway", tags.get("Name", ""), None, tags)))
         for lb in (self._json("load_balancers.json") or {}).get("LoadBalancers", []):
             tags = _tags(lb.get("Tags"))
             if not self._in_scope(tags):
@@ -231,7 +242,8 @@ class DumpAwsAdapter:
             key = arn.split("loadbalancer/", 1)[-1]
             res.append(Resource(key, "elb", region, lb.get("Type", "application"),
                                 lb.get("State", {}).get("Code", "unknown"), lb.get("LoadBalancerName", key), tags,
-                                {"metric_key": key}, self._cost_for(arn, key)))
+                                {"metric_key": key}, self._cost_for(arn, key),
+                                self._link("aws_lb", lb.get("LoadBalancerName", ""), None, tags)))
         idx = self._metric_index()
         for fn in (self._json("lambda_functions.json") or {}).get("Functions", []):
             tags = fn.get("Tags") or {}
@@ -248,7 +260,8 @@ class DumpAwsAdapter:
                                 tags, {"memory_mb": fn.get("MemorySize"), "monthly_invocations": int(inv or 0),
                                        "avg_duration_ms": round(dur or 0), "runtime": fn.get("Runtime"),
                                        "architecture": (fn.get("Architectures") or ["x86_64"])[0]},
-                                self._cost_for(f"function:{name}", name)))
+                                self._cost_for(f"function:{name}", name),
+                                self._link("aws_lambda_function", name, None, tags)))
         for b in (self._json("s3_buckets.json") or {}).get("Buckets", []):
             tags = b.get("Tags") or {}
             if not self._in_scope(tags):
@@ -262,7 +275,8 @@ class DumpAwsAdapter:
                                    "acl": b.get("Acl")}
             if "infrequent_access_ratio" in sca:
                 cfg["objects_not_accessed_90d_ratio"] = sca["infrequent_access_ratio"]
-            res.append(Resource(name, "s3", region, "STANDARD", "active", name, tags, cfg, self._cost_for(name)))
+            res.append(Resource(name, "s3", region, "STANDARD", "active", name, tags, cfg, self._cost_for(name),
+                                self._link("aws_s3_bucket", name, None, tags)))
         self._inventory = res
         return res
 
@@ -280,4 +294,4 @@ class DumpAwsAdapter:
         dates = sorted({d for s in by.values() for d in s})[-days:]
         series = {svc: [(d, round(vals.get(d, 0.0), 2)) for d in dates] for svc, vals in by.items()}
         return CostSeries("DAILY", self.manifest.get("currency", "USD"), dates[0] if dates else "",
-                          dates[-1] if dates else "", series, measured=True)
+                          dates[-1] if dates else "", series, measured=not self.report.simulated)

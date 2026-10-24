@@ -145,7 +145,9 @@ def fix(finding_id: str, body: RemediateRequest, request: Request, db: Session =
         raise ApiError(404, "not_found", "Proposal not found for this finding")
     if not publish.publish_enabled(c):
         raise ApiError(422, "github_token_missing",
-                       f"Set {c.settings.github_token_env} on the server to let Fix open a pull request")
+                       f"Configure a GitHub App (GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, "
+                       f"GITHUB_APP_PRIVATE_KEY_PATH) or set {c.settings.github_token_env} on the server to let Fix "
+                       "open a pull request")
     remediation.one_click_fix(db, c, f, prop, principal, body.comment, client_ip(request))
     return ProposalOut.model_validate(prop)
 

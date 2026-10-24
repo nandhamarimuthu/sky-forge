@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from collections import defaultdict
 from typing import Any
@@ -10,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.adapters.aws.factory import available_fixture_dumps, fixture_dumps_dir
 from app.agents import AGENTS
 from app.agents.base import TOOL_NAMES
 from app.api.deps import accessible_project_ids, client_ip, container, get_principal, require
@@ -22,9 +20,9 @@ from app.schemas.api import AgentRunOut, AuditOut, Page, SettingsUpdate, TestRun
 from app.services.audit import audit
 from app.services.container import Container
 from app.services.llm import PROVIDERS
-from app.services.publish import publish_enabled
+from app.services.publish import github_auth_mode, publish_enabled
 from app.services.reset import wipe_all
-from app.services.views import OPEN_STATUSES, aws_adapter_for, scan_out
+from app.services.views import OPEN_STATUSES, aws_adapter_for, project_quality_metrics, scan_out
 
 router = APIRouter(tags=["platform"])
 
@@ -40,8 +38,9 @@ def health(db: Session = Depends(get_db), c: Container = Depends(container)) -> 
     return {"status": "ok" if db_ok else "degraded", "version": "0.1.0", "database": db_ok,
             "llm": {"reachable": llm["reachable"], "model_available": llm["model_available"], "model": llm["model"],
                     "provider": llm["provider"], "crewai_installed": llm["crewai_installed"]},
-            "sandbox": c.sandbox.available(), "aws_mode": c.settings.aws_mode,
-            "github_publish": publish_enabled(c), "github_token_env": c.settings.github_token_env}
+            "sandbox": c.sandbox.available(), "aws_mode": "terraform",
+            "github_publish": publish_enabled(c), "github_token_env": c.settings.github_token_env,
+            "github_auth": github_auth_mode(c)}
 
 
 @router.get("/dashboard/summary")
@@ -54,6 +53,8 @@ def dashboard(db: Session = Depends(get_db), principal: Principal = Depends(get_
         select(Finding.severity, func.count()).where(*open_f).group_by(Finding.severity)).all()}
     by_agent: dict[str, int] = {k: v for k, v in db.execute(select(Finding.source_agent, func.count()).where(*open_f)
                                                             .group_by(Finding.source_agent)).all()}
+    by_category: dict[str, int] = {k: v for k, v in db.execute(select(Finding.category, func.count()).where(*open_f)
+                                                               .group_by(Finding.category)).all()}
     by_status: dict[str, int] = {k: v for k, v in db.execute(select(Finding.status, func.count())
                                                              .where(Finding.project_id.in_(ids))
                                                              .group_by(Finding.status)).all()}
@@ -62,26 +63,31 @@ def dashboard(db: Session = Depends(get_db), principal: Principal = Depends(get_
     assert savings is not None  # coalesce(..., 0.0) never yields NULL
 
     coverage, health, spend, simulated = [], [], 0.0, False
+    spend_series: dict[str, float] = defaultdict(float)
     per_project = []
     for p in projects:
         last = db.execute(select(Scan).where(Scan.project_id == p.id, Scan.status.in_(["completed", "partial"]))
                           .order_by(Scan.created_at.desc()).limit(1)).scalar_one_or_none()
-        s = last.summary if last else {}
-        cov = s.get("coverage_after") or s.get("coverage")
+        quality = project_quality_metrics(db, p.id)
+        cov = quality["coverage"]
         if cov is not None:
             coverage.append(cov)
-        if s.get("health_score") is not None:
-            health.append(s["health_score"])
-        aws_run = db.execute(select(AgentRun).where(AgentRun.project_id == p.id, AgentRun.agent_id == "aws_optimizer",
-                                                    AgentRun.status == "completed")
-                             .order_by(AgentRun.finished_at.desc()).limit(1)).scalar_one_or_none()
-        p_spend = ((aws_run.metrics or {}).get("spend") or {}).get("last_30_days") if aws_run else None
-        if p_spend:
-            assert aws_run is not None
+        if quality["health_score"] is not None:
+            health.append(quality["health_score"])
+        adapter = aws_adapter_for(c, db, p)
+        cost = adapter.cost(60)
+        p_spend = None
+        if cost:
+            daily: dict[str, float] = defaultdict(float)
+            for pts in cost.by_service.values():
+                for day, value in pts:
+                    daily[day] += value
+                    spend_series[day] += value
+            p_spend = round(sum(value for _, value in sorted(daily.items())[-30:]), 2)
             spend += p_spend
-            simulated = simulated or bool((aws_run.metrics or {}).get("simulated"))
+            simulated = simulated or adapter.report.simulated
         per_project.append({"id": p.id, "name": p.name, "coverage": cov,
-                            "health_score": s.get("health_score"), "spend_30d": p_spend,
+                            "health_score": quality["health_score"], "spend_30d": p_spend,
                             "open": db.execute(select(func.count()).where(Finding.project_id == p.id,
                                                                           Finding.status.in_(OPEN_STATUSES))
                                                ).scalar_one(),
@@ -111,21 +117,14 @@ def dashboard(db: Session = Depends(get_db), principal: Principal = Depends(get_
               "critical": (s.summary or {}).get("by_severity", {}).get("critical", 0),
               "high": (s.summary or {}).get("by_severity", {}).get("high", 0),
               "health_score": (s.summary or {}).get("health_score"),
-              "coverage": (s.summary or {}).get("coverage_after") or (s.summary or {}).get("coverage")}
+              "coverage": ((s.summary or {}).get("coverage_after") if (s.summary or {}).get("coverage_after") is not None
+                           else (s.summary or {}).get("coverage"))}
              for s in trend_rows]
     top = db.execute(select(Finding).where(*open_f).order_by(
         func.coalesce(Finding.estimated_monthly_savings, 0).desc()).limit(200)).scalars().all()
     rank = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
     top = sorted(top, key=lambda f: (-rank.get(f.severity, 0), -(f.estimated_monthly_savings or 0)))[:10]
 
-    spend_series: dict[str, float] = defaultdict(float)
-    for p in projects[:10]:
-        if p.cloud_account:
-            cost = aws_adapter_for(c, db, p).cost(60)
-            if cost:
-                for pts in cost.by_service.values():
-                    for d, v in pts:
-                        spend_series[d] += v
     agent_activity = []
     for a in AGENTS.values():
         last_run = db.execute(select(AgentRun).where(AgentRun.project_id.in_(ids), AgentRun.agent_id == a.id)
@@ -139,6 +138,8 @@ def dashboard(db: Session = Depends(get_db), principal: Principal = Depends(get_
     return {
         "projects": len(projects), "open_by_severity": by_sev, "open_total": sum(by_sev.values()),
         "critical_high": by_sev.get("critical", 0) + by_sev.get("high", 0), "by_status": by_status,
+        "open_by_category": by_category,
+        "vulnerabilities": by_category.get("vulnerability", 0),
         "coverage_avg": round(sum(coverage) / len(coverage), 1) if coverage else None,
         "health_avg": round(sum(health) / len(health)) if health else None,
         "tests": test_totals, "spend_30d": round(spend, 2), "spend_simulated": simulated,
@@ -154,13 +155,7 @@ def dashboard(db: Session = Depends(get_db), principal: Principal = Depends(get_
 
 @router.get("/aws/dumps")
 def aws_dumps(principal: Principal = Depends(get_principal), c: Container = Depends(container)) -> list[dict[str, Any]]:
-    out = []
-    for name in available_fixture_dumps(c.settings):
-        m = json.loads((fixture_dumps_dir(c.settings) / name / "manifest.json").read_text(encoding="utf-8"))
-        out.append({"name": name, "account_id": m.get("account_id"), "region": m.get("region"),
-                    "period_start": m.get("period_start"), "period_end": m.get("period_end"),
-                    "project_tag": m.get("project_tag", ""), "description": m.get("description", "")})
-    return out
+    return []
 
 
 @router.get("/agents")
@@ -238,10 +233,10 @@ def get_settings_view(db: Session = Depends(get_db), principal: Principal = Depe
                         "agent_timeout_s": c.settings.agent_timeout_s, "max_repo_mb": c.settings.max_repo_mb,
                         **(stored.get("scan_policy") or {})},
         "integrations": {"osv": c.settings.osv_api_url, "docker_sandbox": c.sandbox.available(),
-                         "sandbox_image": c.settings.sandbox_python_image, "aws_mode": c.settings.aws_mode,
+                         "sandbox_image": c.settings.sandbox_python_image, "aws_mode": "terraform",
                          "aws_regions": c.settings.region_allowlist, "aws_services": c.settings.service_allowlist,
                          "git_hosts": c.settings.git_hosts, "github_publish": publish_enabled(c),
-                         "github_token_env": c.settings.github_token_env},
+                         "github_token_env": c.settings.github_token_env, "github_auth": github_auth_mode(c)},
         "principal": {"name": principal.name, "role": principal.role, "projects": sorted(principal.projects),
                       "permissions": sorted({p for p in ("read", "project:create", "scan:run", "finding:review",
                                                          "remediation:approve", "remediation:apply", "settings:write",

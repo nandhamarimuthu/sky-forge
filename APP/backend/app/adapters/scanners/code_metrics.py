@@ -12,19 +12,25 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from app.adapters.repository.git_repo import RepoWorkspace
+from app.adapters.scanners.js_refactor import unused_require_edits
+from app.adapters.scanners.languages import TEST_PATH as _TEST_PATH
+from app.adapters.scanners.languages import discover_routes_textual
+from app.adapters.scanners.languages import is_test_path as _is_test_path
 
-CODE_EXTS = {".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".java", ".rb"}
-TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec|e2e)(/|$)|(^|/)test_[^/]+\.py$|_test\.(py|go)$|\.(test|spec)\.[jt]sx?$")
+CODE_EXTS = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".go", ".java", ".kt", ".cs", ".rb", ".php",
+             ".rs", ".scala", ".swift"}
+TEST_PATH = _TEST_PATH
 
 
 def is_test_path(rel: str) -> bool:
-    return bool(TEST_PATH.search(rel))
+    return _is_test_path(rel)
 
 
 def ruff_binary() -> str | None:
@@ -124,7 +130,36 @@ def _complexity_map(source: str) -> dict[tuple[str, int], int]:
     return out
 
 
+_MODULE_CACHE: dict[tuple[str, int, float], ModuleMetrics] = {}
+_CACHE_LOCK = threading.Lock()
+
+
 def analyse_python_module(ws: RepoWorkspace, path: Path) -> ModuleMetrics:
+    """AST + Radon metrics for one module.
+
+    Memoised on (path, size, mtime): the Unit Test and Code Health agents analyse the same checkout concurrently
+    and Radon's maintainability pass is the single most expensive static step in a scan.
+    """
+    try:
+        stat = path.stat()
+        key: tuple[str, int, float] | None = (str(path), stat.st_size, stat.st_mtime)
+    except OSError:
+        key = None
+    if key is not None:
+        with _CACHE_LOCK:
+            hit = _MODULE_CACHE.get(key)
+        if hit is not None:
+            return hit
+    metrics = _analyse_python_module(ws, path)
+    if key is not None:
+        with _CACHE_LOCK:
+            if len(_MODULE_CACHE) > 5000:
+                _MODULE_CACHE.clear()
+            _MODULE_CACHE[key] = metrics
+    return metrics
+
+
+def _analyse_python_module(ws: RepoWorkspace, path: Path) -> ModuleMetrics:
     rel = ws.rel(path)
     source = ws.read_text(path)
     lines = source.splitlines()
@@ -183,6 +218,32 @@ def module_name_for(rel: str) -> str:
     return ".".join(parts)
 
 
+JS_EXTS = {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}
+
+
+@dataclass
+class DeadImport:
+    file: str
+    line: int
+    names: list[str]
+    text: str
+
+
+def find_dead_js_imports(ws: RepoWorkspace, path: Path) -> list[DeadImport]:
+    """Unused scalar require bindings safe to replace with the same require call.
+
+    This deliberately excludes ESM and destructuring: removing those bindings may
+    change link-time validation, getters, or iterator effects.
+    """
+    return [DeadImport(ws.rel(path), edit.line, [edit.name], edit.original.strip())
+            for edit in unused_require_edits(ws.read_text(path))]
+
+
+def strip_lines(text: str, line_numbers: set[int]) -> str:
+    kept = [ln for i, ln in enumerate(text.splitlines(keepends=True), start=1) if i not in line_numbers]
+    return "".join(kept)
+
+
 @dataclass
 class DuplicateBlock:
     hash: str
@@ -191,6 +252,13 @@ class DuplicateBlock:
 
 
 def find_duplicates(ws: RepoWorkspace, window: int = 8, max_files: int = 600) -> list[DuplicateBlock]:
+    """Rolling-window clone detection.
+
+    Windows advance by `window // 2` rather than 1: a clone of `window` lines is still caught by at least one
+    aligned window in both copies, but the number of hashes (and the peak memory of the index) drops ~4×, which
+    is the difference between seconds and minutes on a large repository.
+    """
+    stride = max(1, window // 2)
     index: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for count, path in enumerate(ws.iter_files(CODE_EXTS, max_bytes=300_000)):
         if count >= max_files:
@@ -202,13 +270,15 @@ def find_duplicates(ws: RepoWorkspace, window: int = 8, max_files: int = 600) ->
         norm = [(i + 1, re.sub(r"\s+", " ", ln.strip())) for i, ln in enumerate(raw)]
         norm = [(i, ln) for i, ln in norm if ln and not ln.startswith(("#", "//", "import ", "from ", "}", "*"))
                 and len(ln) > 3]
-        for k in range(0, max(0, len(norm) - window + 1)):
+        for k in range(0, max(0, len(norm) - window + 1), stride):
             chunk = "\n".join(ln for _, ln in norm[k:k + window])
             h = hashlib.sha1(chunk.encode(), usedforsecurity=False).hexdigest()
             index[h].append((rel, norm[k][0]))
     blocks: list[DuplicateBlock] = []
     claimed: set[tuple[str, int]] = set()
     for h, occ in index.items():
+        if len(occ) < 2:
+            continue
         distinct: list[tuple[str, int]] = []
         for f, line in occ:
             if any(f == cf and abs(line - cl) < window for cf, cl in distinct):
@@ -302,3 +372,10 @@ def discover_js_routes(ws: RepoWorkspace, path: Path) -> list[Route]:
             auth = bool(re.search(r"(?i)(auth|isLoggedIn|ensureAuth|passport|jwt)", line))
             out.append(Route("express", m.group(2).upper(), m.group(3), rel, i, "", m.group(1), auth))
     return out
+
+
+def discover_any_routes(ws: RepoWorkspace, path: Path) -> list[Route]:
+    """Routes for every non-Flask/FastAPI stack (Go, Spring, Rails, Laravel, ASP.NET, NestJS, Django, …)."""
+    return [Route(framework=r["framework"], method=r["method"], path=r["path"], file=r["file"], line=r["line"],
+                  handler=r["handler"], app_var=r["app_var"], requires_auth=r["requires_auth"])
+            for r in discover_routes_textual(ws, path)]

@@ -166,7 +166,7 @@ export function SettingsPage() {
         <dl className="kv">
           <dt>Vulnerability DB</dt><dd className="mono">{s.integrations.osv}</dd>
           <dt>Docker sandbox</dt><dd>{s.integrations.docker_sandbox ? `available · ${s.integrations.sandbox_image}` : "unavailable — test execution refused"}</dd>
-          <dt>AWS</dt><dd>{s.integrations.aws_mode === "live" ? "live, read-only boto3" : "one-month data dumps (CUR + CLI export) — choose or upload per project on the AWS page"}</dd>
+          <dt>AWS</dt><dd>Repository Terraform only; dynamically generated cost estimates, never bundled or uploaded dumps</dd>
           <dt>AWS regions</dt><dd className="mono">{s.integrations.aws_regions.join(", ")}</dd>
           <dt>AWS services</dt><dd className="mono">{s.integrations.aws_services.join(", ")}</dd>
           <dt>Git hosts</dt><dd className="mono">{s.integrations.git_hosts.join(", ")}</dd>

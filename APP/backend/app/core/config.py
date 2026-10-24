@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # Env var holding a GitHub token used to push fix branches / open draft PRs (projects may override per repo).
     github_token_env: str = Field(default="GITHUB_TOKEN", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
     github_api_url: str = Field(default="https://api.github.com", pattern=r"^https://")
+    # GitHub App auth (preferred over a PAT when set): short-lived installation tokens are minted on demand.
+    github_app_id: str = ""
+    github_app_installation_id: str = ""
+    github_app_private_key_path: Path | None = None
+    # Alternative to the path: env var holding the PEM contents.
+    github_app_private_key_env: str = Field(default="GITHUB_APP_PRIVATE_KEY", pattern=r"^[A-Z][A-Z0-9_]{2,119}$")
     max_repo_mb: int = 300
     clone_timeout_s: int = 180
     agent_timeout_s: int = 900
@@ -48,6 +54,7 @@ class Settings(BaseSettings):
 
     sandbox_enabled: bool = True
     sandbox_python_image: str = "python:3.11-slim"
+    sandbox_node_image: str = "node:22-slim"
     sandbox_timeout_s: int = 600
     sandbox_memory: str = "1g"
     sandbox_cpus: str = "1.5"
@@ -67,6 +74,15 @@ class Settings(BaseSettings):
     @classmethod
     def _absolute(cls, v: Path) -> Path:
         return v if v.is_absolute() else (BASE_DIR / v).resolve()
+
+    @field_validator("github_app_private_key_path", mode="after")
+    @classmethod
+    def _absolute_optional(cls, v: Path | None) -> Path | None:
+        return None if v is None else (v if v.is_absolute() else (BASE_DIR / v).resolve())
+
+    @property
+    def github_app_configured(self) -> bool:
+        return bool(self.github_app_id and self.github_app_installation_id)
 
     @staticmethod
     def _csv(value: str) -> list[str]:

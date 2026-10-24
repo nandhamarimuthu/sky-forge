@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
-import { AGENT_META, label, timeAgo } from "../features/agents";
+import { AGENT_META, label, normalizeTimestamp, timeAgo } from "../features/agents";
 import type { AgentId } from "../types";
 
 // One shared 1s ticker for every relative timestamp on the page.
@@ -21,7 +21,8 @@ function useNow(): number {
 
 export function TimeAgo({ iso }: { iso?: string | null }) {
   const now = useNow();
-  return <time dateTime={iso ?? undefined} title={iso ? new Date(iso).toLocaleString() : undefined}>{timeAgo(iso, now)}</time>;
+  const timestamp = iso ? normalizeTimestamp(iso) : undefined;
+  return <time dateTime={timestamp} title={timestamp ? new Date(timestamp).toLocaleString() : undefined}>{timeAgo(timestamp, now)}</time>;
 }
 
 export function Kpi({ label: l, value, sub, c, bg }: { label: string; value: ReactNode; sub?: ReactNode; c: string; bg: string }) {

@@ -47,12 +47,8 @@ def project_out(db: Session, p: Project) -> ProjectOut:
     assert savings is not None  # coalesce(..., 0.0) never yields NULL
     last = db.execute(select(Scan).where(Scan.project_id == p.id).order_by(Scan.created_at.desc()).limit(1)
                       ).scalar_one_or_none()
-    last_done = db.execute(select(Scan).where(Scan.project_id == p.id, Scan.status.in_(["completed", "partial"]))
-                           .order_by(Scan.created_at.desc()).limit(1)).scalar_one_or_none()
-    summary = last_done.summary if last_done else {}
     out.stats = {"open_by_severity": sev, "open_total": sum(sev.values()), "estimated_monthly_savings": round(savings, 2),
-                 "coverage": summary.get("coverage_after") or summary.get("coverage"),
-                 "coverage_before": summary.get("coverage"), "health_score": summary.get("health_score"),
+                 **project_quality_metrics(db, p.id),
                  "vulnerabilities": db.execute(select(func.count()).where(
                      Finding.project_id == p.id, Finding.category.in_(["vulnerability", "secret", "security_policy",
                                                                        "iac"]),
@@ -74,12 +70,21 @@ def latest_workspace(c: Container, db: Session, project_id: str) -> RepoWorkspac
 
 def aws_adapter_for(c: Container, db: Session, project: Project) -> AwsAdapter:
     ws = latest_workspace(c, db, project.id)
-    hints = iac_hints(parse_terraform(ws)) if ws else []
-    return build_aws_adapter(c.settings, project.cloud_account, hints)
+    tf = parse_terraform(ws) if ws else []
+    return build_aws_adapter(c.settings, project.cloud_account, iac_hints(tf), tf)
 
 
 def latest_agent_metrics(db: Session, project_id: str, agent_id: str) -> tuple[dict[str, Any], str | None]:
     run = db.execute(select(AgentRun).where(AgentRun.project_id == project_id, AgentRun.agent_id == agent_id,
-                                            AgentRun.status == "completed").order_by(AgentRun.finished_at.desc())
+                                            AgentRun.status.in_(["completed", "partial"])).order_by(AgentRun.finished_at.desc())
                      .limit(1)).scalar_one_or_none()
     return (run.metrics or {}, run.scan_id) if run else ({}, None)
+
+
+def project_quality_metrics(db: Session, project_id: str) -> dict[str, Any]:
+    """A scan of unrelated agents must not erase the last coverage/health result."""
+    coverage, _ = latest_agent_metrics(db, project_id, "unit_test")
+    health, _ = latest_agent_metrics(db, project_id, "code_health")
+    before, after = coverage.get("coverage_before"), coverage.get("coverage_after")
+    return {"coverage": after if after is not None else before, "coverage_before": before,
+            "health_score": health.get("health_score")}

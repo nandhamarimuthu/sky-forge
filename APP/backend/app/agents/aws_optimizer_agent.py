@@ -62,14 +62,17 @@ class AwsOptimizerAgent(BaseAgent):
     def run(self, ctx: AgentContext) -> AgentResult:
         ws = ctx.tool("repo.read")
         tf = ctx.tool("terraform.parse")(ws)
-        adapter: AwsAdapter = ctx.tool("aws.read")(iac_hints(tf))
+        adapter: AwsAdapter = ctx.tool("aws.read")(iac_hints(tf), tf)
         simulated = adapter.report.simulated
         dump = adapter.report.mode == "dump"
         source = "simulated" if simulated else "estimated"
-        tool_label = {"dump": "aws-data-dump (CUR + CLI export)", "live": "boto3 (read-only)"}.get(
-            adapter.report.mode, "aws-adapter")
+        tool_label = ("terraform-generated AWS model" if simulated else
+                      {"dump": "aws-data-dump (CUR + CLI export)", "live": "boto3 (read-only)"}.get(
+                          adapter.report.mode, "aws-adapter"))
         result = AgentResult(agent_id="aws_optimizer", tools_used=[tool_label])
-        pricing_note = ("actual spend from the Cost & Usage Report; savings ratios from on-demand list prices"
+        pricing_note = ("Terraform-derived model; utilisation and spend are estimates, not AWS measurements"
+                        if simulated else
+                        "actual spend from the Cost & Usage Report; savings ratios from on-demand list prices"
                         if dump else "on-demand list price estimate (eu-west-2)")
         observed_days = 14
         acct = ctx.project.get("aws") or {}
@@ -91,7 +94,7 @@ class AwsOptimizerAgent(BaseAgent):
                                                        "state": res.state, "tags": res.tags, "config": res.config},
                           "observed": evidence, "period_days": observed_days, "calculation": calc,
                           "savings_type": savings_type, "pricing": pricing_note,
-                          "actual_monthly_cost": res.monthly_cost if dump else None,
+                          "actual_monthly_cost": res.monthly_cost if dump and not simulated else None,
                           "simulated": simulated},
                 recommendation=rec, confidence=confidence,  # type: ignore[arg-type]
                 data_source=source if savings_type != "hypothetical" else "estimated",  # type: ignore[arg-type]
@@ -118,8 +121,8 @@ class AwsOptimizerAgent(BaseAgent):
                         risk="Stopping an instance interrupts anything still depending on it.")
                 elif (cpu_max or 100) < 25:
                     smaller = pricing.smaller(res.type, pricing.EC2_HOURLY)
-                    if smaller:
-                        ratio = pricing.EC2_HOURLY[smaller] / pricing.EC2_HOURLY[res.type]
+                    ratio = pricing.ratio(res.type, smaller, pricing.EC2_HOURLY) if smaller else None
+                    if smaller and ratio is not None:
                         proposal = self._iac_patch(ws, tf_by_addr.get(res.iac_address or ""), "instance_type",
                                                    res.type, smaller)
                         add(res, "ec2-rightsize", "medium", f"Rightsize {res.name}: {res.type} → {smaller}",
@@ -137,9 +140,14 @@ class AwsOptimizerAgent(BaseAgent):
                 size = res.config["size_gb"]
                 saving = size * (pricing.EBS_GB_MONTH["gp2"] - pricing.EBS_GB_MONTH["gp3"])
                 if saving >= 2:
+                    tf_res = tf_by_addr.get(res.iac_address or "")
+                    # Standalone volumes use `type`; a root_block_device inside an instance uses `volume_type`.
+                    patch = (self._iac_patch(ws, tf_res, "type", "gp2", "gp3")
+                             or self._iac_patch(ws, tf_res, "volume_type", "gp2", "gp3"))
                     add(res, "ebs-gp2-to-gp3", "low", f"Migrate {res.id} from gp2 to gp3", saving,
                         f"{size} GiB × (${pricing.EBS_GB_MONTH['gp2']} − ${pricing.EBS_GB_MONTH['gp3']})",
-                        {"size_gb": size}, "Modify volume type to gp3 (online operation).", "high")
+                        {"size_gb": size}, "Modify volume type to gp3 (online operation).", "high",
+                        proposal=patch)
             elif res.service == "snapshot" and res.config.get("age_days", 0) > 180:
                 add(res, "snapshot-old", "low", f"Snapshot {res.id} is {res.config['age_days']} days old",
                     res.monthly_cost or 0, f"{res.config['size_gb']} GiB × ${pricing.SNAPSHOT_GB_MONTH}",
@@ -148,14 +156,17 @@ class AwsOptimizerAgent(BaseAgent):
                 cpu, conns = _avg(m.get("CPUUtilization")), _avg(m.get("DatabaseConnections"))
                 if cpu is not None and cpu < 10 and (conns or 0) < 5:
                     smaller = pricing.smaller(res.type, pricing.RDS_HOURLY)
+                    rds_ratio: float | None = None
                     if not smaller and res.type in pricing.RDS_HOURLY:
                         # Smallest size in its family already: an almost idle DB fits the burstable class.
                         burst = "db.t3." + res.type.rpartition(".")[2]
                         if pricing.RDS_HOURLY.get(burst, 1e9) < pricing.RDS_HOURLY[res.type]:
                             smaller = burst
                     if smaller:
+                        rds_ratio = pricing.ratio(res.type, smaller, pricing.RDS_HOURLY)
+                    if smaller and rds_ratio is not None:
                         add(res, "rds-rightsize", "medium", f"Downsize RDS {res.name}: {res.type} → {smaller}",
-                            res.monthly_cost * (1 - pricing.RDS_HOURLY[smaller] / pricing.RDS_HOURLY[res.type]),
+                            res.monthly_cost * (1 - rds_ratio),
                             f"${res.monthly_cost} × (1 − ${pricing.RDS_HOURLY[smaller]}/${pricing.RDS_HOURLY[res.type]} per h)",
                             {"cpu_avg_pct": cpu, "connections_avg": conns},
                             "Downsize during a maintenance window; consider Graviton (r6g).", "medium",
@@ -180,7 +191,10 @@ class AwsOptimizerAgent(BaseAgent):
                     add(res, "lambda-arm64", "low", f"Move Lambda {res.name} to arm64 (Graviton)", saving,
                         "GB-seconds × (x86 − arm64 price)", {"monthly_invocations": res.config["monthly_invocations"],
                                                              "avg_duration_ms": res.config["avg_duration_ms"]},
-                        "Rebuild for arm64 and switch architecture after testing.", "medium")
+                        "Rebuild for arm64 and switch architecture after testing.", "medium",
+                        proposal=self._iac_patch(ws, tf_by_addr.get(res.iac_address or ""), "architectures",
+                                                 "x86_64", "arm64"),
+                        risk="The deployment package must be built for arm64.")
             elif res.service == "s3" and not res.config.get("lifecycle_rules"):
                 cold = res.config.get("objects_not_accessed_90d_ratio", 0)
                 saving = res.config["size_gb"] * cold * (pricing.S3_STANDARD_GB - pricing.S3_IA_GB)
@@ -225,13 +239,15 @@ class AwsOptimizerAgent(BaseAgent):
 
     @staticmethod
     def _iac_patch(ws: Any, res: TfResource | None, key: str, old: str, new: str) -> ProposalDraft | None:
-        if not res or key not in res.attrs:
+        if not res:
             return None
-        raw, line_no = res.attrs[key]
-        if old not in raw:
+        line_no = res.attr_line(key, f'"{old}"')
+        if line_no is None:
             return None
         text = ws.read_text(res.file)
         lines = text.splitlines(keepends=True)
+        if f'"{old}"' not in lines[line_no - 1]:
+            return None
         lines[line_no - 1] = lines[line_no - 1].replace(f'"{old}"', f'"{new}"', 1)
         diff = unified_diff(res.file, text, "".join(lines))
         if not diff:

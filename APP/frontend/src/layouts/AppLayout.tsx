@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useDashboard, useHealth, useProjects } from "../api/hooks";
+import { useDashboard, useProjects } from "../api/hooks";
 import { Icon } from "../components/common";
 import { useAddServices } from "../components/AddServicesDialog";
 
@@ -17,7 +17,6 @@ const NAV = [
 
 export function AppLayout({ user, onLogout }: { user: { name: string; role: string }; onLogout: () => void }) {
   const add = useAddServices();
-  const { data: health } = useHealth();
   const { data: dash } = useDashboard();
   const { data: projects } = useProjects();
   const badges: Record<string, number | undefined> = {
@@ -45,15 +44,6 @@ export function AppLayout({ user, onLogout }: { user: { name: string; role: stri
               </NavLink>
             ))}
           </nav>
-        </div>
-        <div className="side-card">
-          <div className="side-card-title">Runtime</div>
-          <div className="side-row">
-            <span className={`pulse ${health?.llm?.model_available ? "" : health?.llm?.reachable ? "warn" : "off"}`} />
-            {health?.llm?.provider === "openai" ? "OpenAI" : "Ollama"} · {health?.llm?.model ?? "…"} {!health?.llm?.reachable && <em style={{ color: "#A86A00", background: "var(--sun-t)" }}>offline</em>}
-          </div>
-          <div className="side-row"><span className={`pulse ${health?.sandbox ? "" : "off"}`} />Docker sandbox {!health?.sandbox && <em style={{ color: "#A86A00", background: "var(--sun-t)" }}>off</em>}</div>
-          <div className="side-row"><span className="pulse" />AWS · <em>{health?.aws_mode === "live" ? "read-only" : "data dump"}</em></div>
         </div>
         <div className="side-user">
           <div className="side-avatar">{user.name.slice(0, 2)}</div>

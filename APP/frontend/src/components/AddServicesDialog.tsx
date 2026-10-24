@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Dialog } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
 import { AGENT_META, AGENT_ORDER } from "../features/agents";
 import type { AgentId, Project } from "../types";
@@ -20,7 +20,6 @@ const SAMPLES = [
 ];
 
 interface Row { name: string; url: string; err?: "name" | "url" }
-interface AwsDump { name: string; account_id: string; region: string; period_start: string; period_end: string; project_tag: string; description: string }
 
 export function AddServicesProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -37,8 +36,6 @@ export function AddServicesProvider({ children }: { children: ReactNode }) {
 function AddServicesForm({ onClose }: { onClose: () => void }) {
   const [rows, setRows] = useState<Row[]>([{ name: "", url: "" }]);
   const [tag, setTag] = useState("");
-  const [dump, setDump] = useState("");
-  const { data: dumps } = useQuery({ queryKey: ["aws-dumps"], queryFn: () => api<AwsDump[]>("/aws/dumps") });
   const [branch, setBranch] = useState("");
   const [agents, setAgents] = useState<AgentId[]>([...AGENT_ORDER]);
   const [scanNow, setScanNow] = useState(true);
@@ -77,7 +74,7 @@ function AddServicesForm({ onClose }: { onClose: () => void }) {
         const p = await api<Project>("/projects", {
           method: "POST",
           json: { name: r.name, repo_url: r.url, branch: branch.trim() || null, scan_scope: agents,
-            aws: { project_tag: tag.trim() || "", mode: "dump", ...(dump ? { dump } : {}) } },
+            aws: { project_tag: tag.trim() || "", mode: "dump" } },
         });
         created.push(p);
         if (scanNow) await api(`/projects/${p.id}/scans`, { method: "POST", json: {} });
@@ -104,7 +101,7 @@ function AddServicesForm({ onClose }: { onClose: () => void }) {
         <img src="/logo.svg" className="modal-logo" alt="" />
         <div>
           <h3 style={{ fontSize: "1.3rem" }}>Add services</h3>
-          <p className="muted">Give each service a unique name and its public repository link. Cost analysis uses a one-month AWS data dump.</p>
+          <p className="muted">Give each service a unique name and its public repository link. AWS cost analysis generates a model using only that repository's Terraform resources.</p>
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
       </div>
@@ -124,18 +121,8 @@ function AddServicesForm({ onClose }: { onClose: () => void }) {
       </div>
       <button type="button" className="add-row" onClick={() => setRows((r) => [...r, { name: "", url: "" }])}>+ Add another service</button>
       <div className="form-row" style={{ marginTop: 14 }}>
-        <label className="field"><span>AWS cost data (one-month dump)</span>
-          <select className="select input" value={dump} onChange={(e) => setDump(e.target.value)}>
-            <option value="">Auto — matching sample, else shared-platform</option>
-            {(dumps ?? []).map((d) => (
-              <option key={d.name} value={d.name}>{d.name} · {d.account_id} · {d.region} · {d.period_start} → {d.period_end}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="form-row" style={{ marginTop: 14 }}>
-        <label className="field"><span>AWS project tag filter (optional)</span>
-          <input className="input" maxLength={80} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="defaults to the dump's tag" />
+        <label className="field"><span>AWS model project tag (optional)</span>
+          <input className="input" maxLength={80} value={tag} onChange={(e) => setTag(e.target.value)} placeholder="defaults to the service name" />
         </label>
         <span />
       </div>

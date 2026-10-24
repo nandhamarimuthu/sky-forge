@@ -13,13 +13,17 @@ import json
 import logging
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
 from app.adapters.repository.git_repo import RepositoryError, RepoWorkspace, run_git
-from app.adapters.scanners.code_metrics import RUFF_SAFE_FIX_RULES, ruff_binary
+from app.adapters.repository.patches import PatchReconstructionError, restore_patch_context
+from app.adapters.scanners.code_metrics import JS_EXTS, RUFF_SAFE_FIX_RULES, ruff_binary
+from app.adapters.scanners.js_refactor import verify_js_refactor
 from app.adapters.scanners.manifests import discover_dependencies
 from app.adapters.scanners.terraform import parse_terraform
 from app.agents.security_guardrails import CODE_RULES, PolicyEngine, scan_secrets, secret_fix, syntax_check
@@ -52,10 +56,14 @@ class Change:
 
 
 def effective_change(prop: RemediationProposal, ws: RepoWorkspace) -> Change:
-    """The patch to validate/apply. Secret fixes are rebuilt from their codemod so stored diffs stay redacted."""
+    """Rebuild redacted context in memory; the persisted and reviewed diff always stays redacted."""
     codemod = (prop.validation or {}).get("codemod")
     if not codemod:
-        return Change(prop.kind, prop.diff, list(prop.files), prop.breaking)
+        try:
+            diff = restore_patch_context(ws, prop.diff)
+        except PatchReconstructionError as exc:
+            raise ApiError(409, "stale_proposal", str(exc)) from exc
+        return Change(prop.kind, diff, list(prop.files), prop.breaking)
     if codemod.get("type") != "secret_env":
         raise ApiError(409, "unsupported_codemod", "Unknown codemod recipe")
     rebuilt = secret_fix(ws, str(codemod["file"]), int(codemod["line"]))
@@ -66,11 +74,12 @@ def effective_change(prop: RemediationProposal, ws: RepoWorkspace) -> Change:
 
 def approve(db: Session, c: Container, finding: Finding, prop: RemediationProposal, actor: Principal,
             comment: str, ip: str | None) -> RemediationProposal:
-    if prop.status not in ("validated", "declined"):
+    if prop.status not in ("validated", "declined", "rejected_by_policy"):
         audit(db, actor.name, "remediation.approve", "proposal", prop.id, "denied",
               {"reason": f"status={prop.status}"}, ip)
-        raise ApiError(409, "invalid_state", f"Proposal is '{prop.status}'; only validated proposals can be approved")
-    validation = PolicyEngine(scan_workspace(c, prop)).validate(effective_change(prop, scan_workspace(c, prop)))
+        raise ApiError(409, "invalid_state", f"Proposal is '{prop.status}' and cannot be approved")
+    ws = scan_workspace(c, prop)
+    validation = PolicyEngine(ws).validate(effective_change(prop, ws))
     if (prop.validation or {}).get("codemod"):
         validation["codemod"] = prop.validation["codemod"]
     prop.validation = validation
@@ -196,7 +205,10 @@ def _apply(c: Container, prop_id: str, actor: str) -> None:
         run_git(["worktree", "add", "-q", "-b", branch, str(wt), base], cwd=ws.root)
         patch = wt.parent / f"{prop.id}.patch"
         patch.write_text(change.diff if change.diff.endswith("\n") else change.diff + "\n", encoding="utf-8")
-        run_git(["apply", "--whitespace=nowarn", str(patch)], cwd=wt)
+        try:
+            run_git(["apply", "--whitespace=nowarn", str(patch)], cwd=wt)
+        finally:
+            patch.unlink(missing_ok=True)
         run_git(["add", "-A"], cwd=wt)
         finding = prop.finding
         msg = (f"SkyForge: {prop.title}\n\nFinding: {finding.id} ({finding.severity})\nAgent: {prop.agent_id}\n"
@@ -303,17 +315,31 @@ def _verify_tests(c: Container, db: Session, ws: RepoWorkspace, prop: Remediatio
 
 def _verify_refactor(ws: RepoWorkspace, prop: RemediationProposal, checks: list[dict]) -> bool:
     ok = True
-    for f in prop.files:
+    py_files = [f for f in prop.files if f.endswith(".py")]
+    js_files = [f for f in prop.files if Path(f).suffix in JS_EXTS]
+    for f in py_files:
         try:
             ast.parse(ws.read_text(f))
             checks.append({"name": f"syntax:{f}", "passed": True, "detail": "parses"})
         except SyntaxError as exc:
             ok = False
             checks.append({"name": f"syntax:{f}", "passed": False, "detail": str(exc)})
+    if js_files:
+        if not prop.base_commit:
+            checks.append({"name": "js_refactor_replayed", "passed": False,
+                           "detail": "Original commit is missing; cannot verify this refactor"})
+            return False
+        before = {f: run_git(["show", f"{prop.base_commit}:{f}"], cwd=ws.root, preserve_output=True) for f in js_files}
+        after = {f: ws.read_text(f) for f in js_files}
+        replayed = verify_js_refactor(before, after)
+        checks.append({"name": "js_refactor_replayed", "passed": replayed,
+                       "detail": "Replayed supported codemods against the original commit" if replayed
+                       else "Change does not match a supported JavaScript refactor"})
+        ok = ok and replayed
     exe = ruff_binary()
-    if exe:
+    if exe and py_files:
         r = subprocess.run([exe, "check", "--isolated", "--no-cache", "--select", RUFF_SAFE_FIX_RULES,
-                            "--output-format", "json", "--exit-zero", "--", *prop.files], cwd=ws.root,
+                            "--output-format", "json", "--exit-zero", "--", *py_files], cwd=ws.root,
                            capture_output=True, text=True, timeout=120, check=False)
         remaining = [v for v in json.loads(r.stdout or "[]") if v.get("fix")]
         checks.append({"name": "safe_fixes_applied", "passed": not remaining,
@@ -326,25 +352,54 @@ def _verify_config(ws: RepoWorkspace, prop: RemediationProposal, finding: Findin
     rule = finding.rule_id.split(":", 1)[-1]
     target = finding.target
     text = ws.read_text(target)
+    line = (finding.location or {}).get("line", 0)
+    lines = text.splitlines()
+    # Codemods may insert imports above the offending line, so verify the rewritten lines from the patch itself
+    # rather than the recorded line number, which the insertion shifts.
+    added = [ln[1:] for ln in (prop.diff or "").splitlines() if ln.startswith("+") and not ln.startswith("+++")]
+    removed = [ln[1:] for ln in (prop.diff or "").splitlines() if ln.startswith("-") and not ln.startswith("---")]
     if finding.category == "secret":
-        line = (finding.location or {}).get("line", 0)
-        still = [h for h in scan_secrets(text) if h[1] == line]
-        checks.append({"name": "secret_removed", "passed": not still, "detail": "rescanned file"})
+        still = scan_secrets("\n".join(added)) if added else [h for h in scan_secrets(text) if h[1] == line]
+        checks.append({"name": "secret_removed", "passed": not still,
+                       "detail": "rescanned the rewritten lines" if added else "rescanned file"})
         checks.append({"name": "rotation_required", "passed": True,
                        "detail": "Rotate the exposed credential — history still contains it"})
         return not still
     rules = [r for r in CODE_RULES if r.id == rule]
-    line = (finding.location or {}).get("line", 0)
-    lines = text.splitlines()
-    pattern_still = bool(rules and 0 < line <= len(lines) and rules[0].pattern.search(lines[line - 1]))
-    checks.append({"name": "pattern_removed", "passed": not pattern_still, "detail": f"rule {rule} at line {line}"})
-    return not pattern_still
+    if rules and added:
+        pattern_still = any(rules[0].pattern.search(a) for a in added)
+        detail = f"rule {rule} not present in {len(added)} rewritten line(s)"
+    else:
+        pattern_still = bool(rules and 0 < line <= len(lines) and rules[0].pattern.search(lines[line - 1]))
+        detail = f"rule {rule} at line {line}"
+    checks.append({"name": "pattern_removed", "passed": not pattern_still, "detail": detail})
+    stale = [r for r in removed if r.strip() and r in lines]
+    checks.append({"name": "original_line_replaced", "passed": not stale,
+                   "detail": "offending line no longer in the file" if not stale else f"{len(stale)} line(s) unchanged"})
+    return not pattern_still and not stale
+
+
+
+def _baseline_syntax_ok(ws: RepoWorkspace, prop: RemediationProposal, rel: str) -> bool:
+    """Was the file already failing its syntax check before the fix branch touched it?"""
+    if not prop.base_commit:
+        return True
+    try:
+        original = run_git(["show", f"{prop.base_commit}:{rel}"], cwd=ws.root, timeout=30, preserve_output=True)
+    except RepositoryError:
+        return True
+    with tempfile.TemporaryDirectory(prefix="skyforge-verify-") as tmp:
+        probe = Path(tmp) / Path(rel).name
+        probe.write_text(original, encoding="utf-8")
+        return syntax_check(probe)[0]
 
 
 def _verify_iac(ws: RepoWorkspace, prop: RemediationProposal, checks: list[dict]) -> bool:
     ok = True
     for f in prop.files:
         valid, msg = syntax_check(ws.path(f))
+        if not valid and not _baseline_syntax_ok(ws, prop, f):
+            valid, msg = True, f"pre-existing syntax errors, not introduced by this fix ({msg})"
         checks.append({"name": f"terraform_syntax:{f}", "passed": valid, "detail": msg})
         ok = ok and valid
     added = [ln[1:] for ln in prop.diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
@@ -359,6 +414,7 @@ def _verify_iac(ws: RepoWorkspace, prop: RemediationProposal, checks: list[dict]
         checks.append({"name": "terraform_fmt", "passed": True,
                        "detail": "formatted" if r.returncode == 0 else "style differences (non-blocking)"})
     return ok and present and bool(tf)
+
 
 
 def record_review(db: Session, finding: Finding, decision: str, actor: Principal, comment: str,
