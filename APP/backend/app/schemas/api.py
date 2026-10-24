@@ -277,6 +277,7 @@ class ReviewRequest(BaseModel):
 class RemediateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     proposal_id: str = Field(max_length=40)
+    comment: str = Field(default="", max_length=1000)
 
 
 class ArtifactOut(ORM):
@@ -310,7 +311,11 @@ class SettingsOut(BaseModel):
 
 class SettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    llm_provider: Literal["ollama", "openai"] | None = None
     ollama_model: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9._:\-/]+$")
+    openai_model: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9._:\-/]+$")
+    # Empty string clears a previously stored key. Never echoed back by the API.
+    openai_api_key: str | None = Field(default=None, max_length=200, pattern=r"^$|^[A-Za-z0-9._\-]{20,}$")
     llm_enabled: bool | None = None
     default_agents: list[str] | None = None
     execute_tests: bool | None = None

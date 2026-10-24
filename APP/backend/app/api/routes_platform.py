@@ -21,6 +21,7 @@ from app.models import AgentRun, AuditEvent, Finding, Project, Scan, Setting, Te
 from app.schemas.api import AgentRunOut, AuditOut, Page, SettingsUpdate, TestRunOut
 from app.services.audit import audit
 from app.services.container import Container
+from app.services.llm import PROVIDERS
 from app.services.publish import publish_enabled
 from app.services.reset import wipe_all
 from app.services.views import OPEN_STATUSES, aws_adapter_for, scan_out
@@ -38,9 +39,9 @@ def health(db: Session = Depends(get_db), c: Container = Depends(container)) -> 
     llm = c.llm.status()
     return {"status": "ok" if db_ok else "degraded", "version": "0.1.0", "database": db_ok,
             "llm": {"reachable": llm["reachable"], "model_available": llm["model_available"], "model": llm["model"],
-                    "crewai_installed": llm["crewai_installed"]},
+                    "provider": llm["provider"], "crewai_installed": llm["crewai_installed"]},
             "sandbox": c.sandbox.available(), "aws_mode": c.settings.aws_mode,
-            "github_publish": publish_enabled(c)}
+            "github_publish": publish_enabled(c), "github_token_env": c.settings.github_token_env}
 
 
 @router.get("/dashboard/summary")
@@ -231,7 +232,8 @@ def get_settings_view(db: Session = Depends(get_db), principal: Principal = Depe
     stored = {s.key: s.value for s in db.execute(select(Setting)).scalars()}
     llm = c.llm.status()
     return {
-        "llm": {**llm, "model": c.llm.model, "enabled": c.llm.enabled},
+        "llm": {**llm, "model": c.llm.model, "enabled": c.llm.enabled, "provider": c.llm.provider,
+                "providers": list(PROVIDERS)},
         "scan_policy": {"default_agents": list(AGENTS), "execute_tests": True, "auto_generate_tests": True,
                         "agent_timeout_s": c.settings.agent_timeout_s, "max_repo_mb": c.settings.max_repo_mb,
                         **(stored.get("scan_policy") or {})},
@@ -253,11 +255,15 @@ def update_settings(body: SettingsUpdate, request: Request, db: Session = Depend
                     principal: Principal = Depends(require("settings:write")),
                     c: Container = Depends(container)) -> dict[str, Any]:
     changes = body.model_dump(exclude_none=True)
+    if "llm_provider" in changes:
+        c.llm.provider = changes["llm_provider"]
     if "ollama_model" in changes:
-        c.llm.model = changes["ollama_model"]
-        c.llm.status(force=True)
+        c.llm.ollama_model = changes["ollama_model"]
+    if "openai_model" in changes:
+        c.llm.openai_model = changes["openai_model"]
     if "llm_enabled" in changes:
         c.llm.enabled = changes["llm_enabled"]
+    if changes.keys() & {"llm_provider", "ollama_model", "openai_model", "llm_enabled"}:
         c.llm.status(force=True)
     policy_keys = {"default_agents", "execute_tests", "auto_generate_tests"}
     policy = {k: v for k, v in changes.items() if k in policy_keys}
@@ -266,13 +272,22 @@ def update_settings(body: SettingsUpdate, request: Request, db: Session = Depend
         row.value = {**(row.value or {}), **policy}
         row.updated_by = principal.name
         db.add(row)
-    llm_keys = {k: v for k, v in changes.items() if k in ("ollama_model", "llm_enabled")}
+    llm_keys = {k: v for k, v in changes.items()
+                if k in ("llm_provider", "ollama_model", "openai_model", "llm_enabled")}
     if llm_keys:
         row = db.get(Setting, "llm") or Setting(key="llm", value={})
         row.value = {**(row.value or {}), **llm_keys}
         row.updated_by = principal.name
         db.add(row)
-    audit(db, principal.name, "settings.update", "settings", "global", "allowed", changes, client_ip(request))
+    if "openai_api_key" in changes:
+        c.llm.set_api_key(changes["openai_api_key"])
+        row = db.get(Setting, "llm_secrets") or Setting(key="llm_secrets", value={})
+        row.value = {**(row.value or {}), "openai_api_key": c.llm.api_key_override}
+        row.updated_by = principal.name
+        db.add(row)
+    audit(db, principal.name, "settings.update", "settings", "global", "allowed",
+          {**changes, **({"openai_api_key": "set" if changes["openai_api_key"] else "cleared"}
+                         if "openai_api_key" in changes else {})}, client_ip(request))
     return get_settings_view(db, principal, c)
 
 

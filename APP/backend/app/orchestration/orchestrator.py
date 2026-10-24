@@ -437,7 +437,8 @@ class ScanOrchestrator:
         explanations: dict[str, str] = {}
         engine = "template"
         if self.llm.usable and top:
-            sink.emit("scan.log", f"Generating explanations with {self.llm.resolved_model()} via CrewAI/Ollama")
+            sink.emit("scan.log",
+                      f"Generating explanations with {self.llm.resolved_model()} via CrewAI/{self.llm.provider}")
             try:
                 explanations, engine = explain_with_crew(self.llm, top)
             except Exception as exc:  # noqa: BLE001

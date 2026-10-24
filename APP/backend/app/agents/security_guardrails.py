@@ -100,8 +100,9 @@ MANIFESTS = {"requirements.txt", "pyproject.toml", "package.json", "go.mod", "re
              "requirements-test.txt", "requirements_dev.txt", "test-requirements.txt"}
 KIND_RULES: dict[str, dict[str, Any]] = {
     "dependency_upgrade": {"exts": None, "new_files": False},
-    "test_addition": {"exts": {".py"}, "new_files": True, "dir": re.compile(r"^tests?/")},
-    "functional_test": {"exts": {".py", ".js", ".ts"}, "new_files": True, "dir": re.compile(r"^tests?/")},
+    "test_addition": {"exts": {".py"}, "new_files": True, "dir": re.compile(r"^(tests?|skyforge_tests)/")},
+    "functional_test": {"exts": {".py", ".js", ".ts"}, "new_files": True,
+                        "dir": re.compile(r"^(tests?|skyforge_tests)/")},
     "refactor": {"exts": {".py"}, "new_files": False},
     "config_fix": {"exts": {".py", ".js", ".ts", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ".tf"},
                    "new_files": False},

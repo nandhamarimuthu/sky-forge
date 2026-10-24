@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Drawer, Tooltip } from "@mui/material";
-import { useFinding, useHealth, useOpenPullRequest, useRemediate, useReview } from "../api/hooks";
+import { useFinding, useFix, useHealth, useOpenPullRequest, useRemediate, useReview } from "../api/hooks";
 import { ApiError } from "../api/client";
 import { AGENT_META, label, money } from "../features/agents";
 import type { FindingDetail, Proposal } from "../types";
@@ -89,7 +89,7 @@ function FindingPanel({ id, onClose }: { id: string; onClose: () => void }) {
           <Evidence f={f} />
           <section className="stack" style={{ gap: 12 }}>
             <h3>Proposed fix</h3>
-            {f.proposals.length === 0 && <div className="panel dim">No automated fix for this finding — follow the recommendation above.</div>}
+            {f.proposals.length === 0 && <NoProposal f={f} />}
             {f.proposals.map((p) => (
               <ProposalCard key={p.id} p={p} findingId={f.id} onReview={act} busy={review.isPending} />
             ))}
@@ -142,14 +142,43 @@ function errMsg(e: unknown) {
   return (e as Error).message;
 }
 
+function NoProposal({ f }: { f: FindingDetail }) {
+  const { data: health } = useHealth();
+  const reason =
+    f.category === "coverage"
+      ? "SkyForge only proposes tests it has actually executed and seen pass in the Docker sandbox. For this module it could not build any: functions that need a web request context, touch I/O, randomness or mutable module-level globals are skipped, and generated tests that fail are discarded."
+      : "No deterministic, guardrail-safe patch could be derived for this finding.";
+  return (
+    <div className="panel">
+      <div className="row wrap" style={{ marginBottom: 6 }}>
+        <b>No automated fix to apply</b>
+        <Tooltip title="A fix must exist before it can be applied and turned into a pull request">
+          <span><button className="btn btn-primary btn-sm" disabled>Fix &amp; open PR</button></span>
+        </Tooltip>
+      </div>
+      <p style={{ fontSize: ".86rem" }}>{reason} Follow the recommendation above.</p>
+      {f.category === "coverage" && !health?.sandbox && (
+        <p className="form-msg err" style={{ marginTop: 8 }}>
+          The Docker sandbox is unavailable on the server, so no tests can be generated or verified at all.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId: string; onReview: (d: string, pid?: string) => void; busy: boolean }) {
   const remediate = useRemediate(findingId);
   const openPr = useOpenPullRequest(findingId);
+  const fix = useFix(findingId);
   const { data: health } = useHealth();
   const pr = p.verification?.pull_request;
   const toast = useToast();
   const checks = p.validation?.checks ?? [];
   const vchecks = p.verification?.checks ?? [];
+  const fixable = ["validated", "declined", "rejected_by_policy", "approved"].includes(p.status);
+  const fixBlocked = !health?.github_publish
+    ? `Set ${health?.github_token_env ?? "GITHUB_TOKEN"} on the server — SkyForge needs a GitHub token to push the branch and open the pull request.`
+    : null;
   return (
     <div className="card" style={{ padding: 18 }}>
       <div className="row wrap" style={{ marginBottom: 8 }}>
@@ -192,6 +221,9 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
             ))}
           </div>
           {p.verification?.rollback && <p className="mono dim" style={{ marginTop: 8 }}>Rollback: {p.verification.rollback}</p>}
+          {p.verification?.pull_request_error && !pr && (
+            <p className="form-msg err" style={{ marginTop: 8 }}>Pull request not opened — {p.verification.pull_request_error}</p>
+          )}
           {pr && (
             <p style={{ marginTop: 8 }}>
               Draft PR <a href={pr.url} target="_blank" rel="noopener noreferrer"><b>#{pr.number}</b> in {pr.repo}</a>
@@ -201,11 +233,24 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
         </div>
       )}
       <div className="modal-actions" style={{ marginTop: 14 }}>
+        {fixable && (
+          <Tooltip title={fixBlocked ?? "Approves, applies the change on an isolated skyforge/ branch, verifies it in the sandbox and opens a draft pull request"}>
+            <span>
+              <button className="btn btn-primary btn-sm" disabled={busy || fix.isPending || !!fixBlocked}
+                onClick={() => fix.mutate(p.id, {
+                  onSuccess: () => toast("Fixing: applying, verifying in the sandbox, then opening a draft PR…", "var(--cobalt)"),
+                  onError: (e) => toast(errMsg(e), "var(--tomato)"),
+                })}>
+                {fix.isPending ? "Fixing…" : "Fix & open PR"}
+              </button>
+            </span>
+          </Tooltip>
+        )}
         {["validated", "approved", "rejected_by_policy"].includes(p.status) && (
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onReview("decline", p.id)}>Decline</button>
         )}
         {(p.status === "validated" || p.status === "declined") && (
-          <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => onReview("approve", p.id)}>Approve fix</button>
+          <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onReview("approve", p.id)}>Approve fix</button>
         )}
         {p.status === "approved" && (
           <button className="btn btn-ink btn-sm" disabled={remediate.isPending}
@@ -226,6 +271,7 @@ function ProposalCard({ p, findingId, onReview, busy }: { p: Proposal; findingId
         )}
         {pr && <a className="btn btn-ghost btn-sm" href={pr.url} target="_blank" rel="noopener noreferrer">View PR #{pr.number}</a>}
       </div>
+      {fixable && fixBlocked && <p className="muted" style={{ marginTop: 8, fontSize: ".82rem" }}>{fixBlocked}</p>}
     </div>
   );
 }

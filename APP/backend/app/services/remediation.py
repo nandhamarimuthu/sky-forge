@@ -28,6 +28,7 @@ from app.core.security import Principal, redact
 from app.db.session import session_scope
 from app.models import Approval, Finding, RemediationProposal, Scan, ScanArtifact, TestRun, utcnow
 from app.orchestration.orchestrator import workspace_dir
+from app.services import publish
 from app.services.audit import audit
 from app.services.container import Container
 
@@ -91,7 +92,7 @@ def approve(db: Session, c: Container, finding: Finding, prop: RemediationPropos
 
 
 def start_apply(db: Session, c: Container, finding: Finding, prop: RemediationProposal, actor: Principal,
-                ip: str | None) -> RemediationProposal:
+                ip: str | None, open_pr: bool = False) -> RemediationProposal:
     if prop.status != "approved":
         audit(db, actor.name, "remediation.apply", "proposal", prop.id, "denied", {"reason": f"status={prop.status}"},
               ip)
@@ -101,16 +102,42 @@ def start_apply(db: Session, c: Container, finding: Finding, prop: RemediationPr
         raise ApiError(409, "approval_required", "No approval record found for this proposal")
     prop.status = "applying"
     finding.status = "in_progress"
-    audit(db, actor.name, "remediation.apply", "proposal", prop.id, "allowed", {"finding": finding.id}, ip)
+    audit(db, actor.name, "remediation.apply", "proposal", prop.id, "allowed",
+          {"finding": finding.id, "auto_pull_request": open_pr}, ip)
     db.commit()
-    c.worker.submit_task(lambda: _apply_and_verify(c, prop.id, actor.name))
+    prop_id = prop.id
+    c.worker.submit_task(lambda: _apply_and_verify(c, prop_id, actor, ip, open_pr))
     return prop
 
 
-def _apply_and_verify(c: Container, prop_id: str, actor: str) -> None:
+def one_click_fix(db: Session, c: Container, finding: Finding, prop: RemediationProposal, actor: Principal,
+                  comment: str, ip: str | None) -> RemediationProposal:
+    """Approve → apply on an isolated branch → verify → open a draft PR, from a single explicit human action.
+
+    Every step still runs its normal guardrail: the click is recorded as the approval, policy is re-validated, the
+    change is only ever committed to a `skyforge/` branch, and the PR is opened only if verification succeeds.
+    """
+    if not actor.can("remediation:approve"):
+        raise ApiError(403, "forbidden", "Your role cannot approve remediations")
+    if prop.status in ("validated", "declined", "rejected_by_policy"):
+        approve(db, c, finding, prop, actor, comment or "Approved via one-click fix", ip)
+    if prop.status == "approved":
+        return start_apply(db, c, finding, prop, actor, ip, open_pr=True)
+    if prop.status in publish.PUBLISHABLE:
+        publish.open_pull_request(db, c, finding, prop, actor, ip)
+        db.refresh(prop)
+        return prop
+    raise ApiError(409, "invalid_state", f"Proposal is '{prop.status}' and cannot be fixed in one click")
+
+
+def _apply_and_verify(c: Container, prop_id: str, actor: Principal | str, ip: str | None = None,
+                      open_pr: bool = False) -> None:
+    name = actor.name if isinstance(actor, Principal) else actor
     try:
-        _apply(c, prop_id, actor)
-        _verify(c, prop_id, actor)
+        _apply(c, prop_id, name)
+        _verify(c, prop_id, name)
+        if open_pr and isinstance(actor, Principal):
+            _publish(c, prop_id, actor, ip)
     except Exception as exc:  # noqa: BLE001 - record any failure on the proposal; never leave it 'applying'
         log.exception("Remediation %s failed", prop_id)
         with session_scope() as db:
@@ -120,8 +147,26 @@ def _apply_and_verify(c: Container, prop_id: str, actor: str) -> None:
                 prop.verification = {**(prop.verification or {}), "error": f"{type(exc).__name__}: {exc}"[:500]}
                 if prop.finding and prop.finding.status == "in_progress":
                     prop.finding.status = "accepted"
-                audit(db, actor, "remediation.error", "proposal", prop_id, "error", {"error": str(exc)[:300]},
+                audit(db, name, "remediation.error", "proposal", prop_id, "error", {"error": str(exc)[:300]},
                       commit=False)
+
+
+def _publish(c: Container, prop_id: str, actor: Principal, ip: str | None) -> None:
+    """Open the draft PR after a successful verification. A publish failure never fails the fix itself."""
+    with session_scope() as db:
+        prop = db.get(RemediationProposal, prop_id)
+        if prop is None or prop.finding is None:
+            return
+        if prop.status not in publish.PUBLISHABLE:
+            prop.verification = {**(prop.verification or {}),
+                                 "pull_request_error": f"Not published: proposal is '{prop.status}'"}
+            return
+        try:
+            publish.open_pull_request(db, c, prop.finding, prop, actor, ip)
+        except ApiError as exc:
+            log.warning("Auto pull request for %s failed: %s", prop_id, exc.code)
+            prop.verification = {**(prop.verification or {}),
+                                 "pull_request_error": f"{exc.code}: {exc.message}"[:500]}
 
 
 def _apply(c: Container, prop_id: str, actor: str) -> None:
@@ -251,7 +296,8 @@ def _verify_tests(c: Container, db: Session, ws: RepoWorkspace, prop: Remediatio
                    details={"label": f"Verification of {prop.id}", "failures": res.failures[:10],
                             "reason": res.reason}))
     checks.append({"name": "tests_pass_in_sandbox", "passed": res.status == "passed",
-                   "detail": f"{res.passed}/{res.total} passed; coverage {res.coverage_percent}%"})
+                   "detail": f"{res.passed}/{res.total} passed; coverage {res.coverage_percent}%",
+                   "coverage_after": res.coverage_percent})
     return res.status == "passed"
 
 

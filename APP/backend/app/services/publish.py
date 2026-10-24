@@ -69,11 +69,34 @@ def publish_enabled(c: Container) -> bool:
     return bool(secret_from_env(c.settings.github_token_env))
 
 
+def _coverage_section(finding: Finding, prop: RemediationProposal) -> list[str]:
+    """Extra PR context for coverage work: what the tests cover and how coverage moved."""
+    ev = finding.evidence or {}
+    before = ev.get("coverage_percent")
+    after = next((ch.get("coverage_after") for ch in (prop.verification or {}).get("checks", [])
+                  if ch.get("coverage_after") is not None), None)
+    lines = ["", "#### Test coverage"]
+    if before is not None:
+        lines.append(f"- `{finding.target}` line coverage before: **{before:.0f}%**")
+    if after is not None:
+        lines.append(f"- Measured in the SkyForge sandbox after these tests: **{after:.0f}%**")
+    targets = ev.get("coverage_targets") or []
+    if targets:
+        lines.append("- Previously uncovered code these tests exercise:")
+        lines += [f"  - `{t.get('function')}` (line {t.get('line')}, complexity {t.get('complexity')}) — "
+                  f"lines {t.get('missing_line_ranges') or '?'}" for t in targets[:8]]
+    lines.append(f"- Files added/changed: {', '.join(f'`{f}`' for f in list(prop.files)[:20]) or 'n/a'}")
+    return lines
+
+
 def _body(finding: Finding, prop: RemediationProposal, approvers: list[str]) -> str:
     checks = (prop.verification or {}).get("checks", [])
     lines = [f"### {prop.title}", "", f"**Finding:** `{finding.id}` · {finding.severity} · `{finding.rule_id}`",
              f"**Target:** `{finding.target}`", "", finding.description[:1500], "",
-             f"**Recommendation:** {finding.recommendation[:800]}", "", "#### Verification"]
+             f"**Recommendation:** {finding.recommendation[:800]}"]
+    if finding.category == "coverage" or prop.kind in ("test_addition", "functional_test"):
+        lines += _coverage_section(finding, prop)
+    lines += ["", "#### Verification"]
     lines += [f"- {'✅' if ch.get('passed') else '❌'} {ch.get('name')}: {str(ch.get('detail', ''))[:200]}"
               for ch in checks] or ["- (no automated verification for this change type)"]
     lines += ["", f"Approved in SkyForge by: {', '.join(approvers) or 'n/a'}",

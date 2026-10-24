@@ -88,6 +88,48 @@ def _check_pull_request(client, fid: str, pid: str, monkeypatch) -> None:
     assert detail["proposals"][0]["verification"]["pull_request"]["number"] == 1
 
 
+def _wait_pull_request(client, finding_id: str, proposal_id: str, timeout: float = 60) -> dict:
+    deadline = time.time() + timeout
+    last: dict = {}
+    while time.time() < deadline:
+        d = client.get(f"/api/v1/findings/{finding_id}", headers=ADMIN).json()
+        last = next(x for x in d["proposals"] if x["id"] == proposal_id)
+        v = last["verification"] or {}
+        if v.get("pull_request") or v.get("pull_request_error"):
+            return last
+        time.sleep(0.3)
+    raise AssertionError(f"one-click fix did not open a pull request: {last}")
+
+
+def _check_one_click_fix(client, project_id: str, skip_finding: str) -> None:
+    """The Fix button: one POST approves, applies on an isolated branch, verifies and opens the draft PR."""
+    page = client.get(f"/api/v1/findings?project_id={project_id}&page_size=100", headers=VIEWER).json()
+    target = None
+    for item in page["items"]:
+        if item["id"] == skip_finding or not item["has_proposal"]:
+            continue
+        detail = client.get(f"/api/v1/findings/{item['id']}", headers=VIEWER).json()
+        prop = next((p for p in detail["proposals"] if p["status"] == "validated"), None)
+        if prop:
+            target = (item["id"], prop["id"])
+            break
+    assert target, "expected another finding with a validated proposal"
+    fid, pid = target
+    url = f"/api/v1/findings/{fid}/fix"
+    assert client.post(url, headers=VIEWER, json={"proposal_id": pid}).status_code == 403
+    assert client.post(url, headers=ENGINEER, json={"proposal_id": "prop_missing"}).status_code == 404
+
+    r = client.post(url, headers=ENGINEER, json={"proposal_id": pid, "comment": "one-click"})
+    assert r.status_code == 202, r.text
+    final = _wait_pull_request(client, fid, pid)
+    assert final["status"] in ("verified", "applied"), final
+    pr = final["verification"]["pull_request"]
+    assert pr["number"] == 1 and pr["branch"].startswith("skyforge/fix-")
+    detail = client.get(f"/api/v1/findings/{fid}", headers=VIEWER).json()
+    assert [a["decision"] for a in detail["approvals"]] == ["approve"]
+    assert detail["approvals"][0]["comment"] == "one-click"
+
+
 def test_health_is_public(client):
     r = client.get("/api/v1/health")
     assert r.status_code == 200 and r.json()["database"] is True
@@ -169,6 +211,7 @@ def test_end_to_end_scan_review_and_remediation(client, monkeypatch):
     assert [a["decision"] for a in detail["approvals"]] == ["approve"]
 
     _check_pull_request(client, fid, prop["id"], monkeypatch)
+    _check_one_click_fix(client, pid, fid)
 
     # Dismiss another finding
     other = page["items"][0]["id"]
@@ -217,6 +260,33 @@ def test_settings_update_admin_only(client):
     r = client.put("/api/v1/settings", headers=ADMIN, json={"ollama_model": "gemma3:4b", "execute_tests": False})
     assert r.status_code == 200 and r.json()["llm"]["model"] == "gemma3:4b"
     assert r.json()["scan_policy"]["execute_tests"] is False
+
+
+def test_llm_provider_toggle(client):
+    r = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "openai", "openai_model": "gpt-4o-mini"})
+    assert r.status_code == 200
+    llm = r.json()["llm"]
+    assert llm["provider"] == "openai" and llm["model"] == "gpt-4o-mini"
+    assert llm["base_url"] == "https://api.openai.com/v1"
+    assert "openai" in llm["providers"] and "ollama" in llm["providers"]
+    back = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "ollama"}).json()["llm"]
+    assert back["provider"] == "ollama" and back["model"] == "gemma3:4b"
+    assert client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "anthropic"}).status_code == 422
+
+
+def test_openai_api_key_is_stored_but_never_returned(client):
+    key = "sk-test" + "a" * 40
+    r = client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "openai", "openai_api_key": key})
+    assert r.status_code == 200
+    llm = r.json()["llm"]
+    assert llm["api_key_configured"] is True and llm["api_key_source"] == "settings"
+    assert key not in r.text and llm["api_key_hint"].endswith(key[-4:])
+    assert client.put("/api/v1/settings", headers=ADMIN, json={"openai_api_key": "short"}).status_code == 422
+    audit_text = client.get("/api/v1/audit", headers=ADMIN).text
+    assert key not in audit_text
+    cleared = client.put("/api/v1/settings", headers=ADMIN, json={"openai_api_key": ""}).json()["llm"]
+    assert cleared["api_key_configured"] is False and cleared["api_key_hint"] is None
+    client.put("/api/v1/settings", headers=ADMIN, json={"llm_provider": "ollama"})
 
 
 def test_reset_clears_all_data_admin_only(client, settings):

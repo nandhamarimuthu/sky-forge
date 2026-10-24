@@ -13,7 +13,8 @@ validated fixes, and present everything in one dashboard. Built to [skill.md](sk
 | 6 · Security Guardrails | Secret scanning, dangerous code patterns, Dockerfile/CI/Terraform policies — **and** a deterministic policy engine that validates every proposed change | repo.read, terraform.parse |
 
 **What is real:** repository cloning, OSV lookups, Ruff/Radon, Docker test execution, LLM test drafting and
-explanations (Ollama `gemma3` via CrewAI), patch validation and remediation.
+explanations (Ollama `gemma3` or OpenAI `gpt-4o-mini` via CrewAI — switch providers in Settings), patch
+validation and remediation.
 
 **AWS cost data (`AWS_MODE=dump`, default):** the optimiser reads a **one-month data dump** in the native export
 formats — a Cost & Usage Report CSV (`lineItem/*` columns), AWS CLI `describe-*` JSON and CloudWatch daily
@@ -45,8 +46,10 @@ cd backend && ../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Open http://127.0.0.1:8000 and sign in with a token from `API_TOKENS`. The database migrates automatically on
 start-up (Alembic). For frontend development run `npm run dev` in `frontend/` (http://localhost:5173, proxies `/api`).
 
-LLM: `ollama pull gemma3 && ollama serve`, plus `pip install -e ".[llm]"` for CrewAI. `/api/v1/health` reports
-`llm.reachable`/`model_available`/`crewai_installed`. Without them, explanations fall back to deterministic
+LLM: two providers, toggled on the Settings page (or `LLM_PROVIDER` in `.env`). **Ollama** (local, default):
+`ollama pull gemma3 && ollama serve`. **OpenAI**: paste the key in Settings → Model provider (stored server-side, returned only masked) or export
+`OPENAI_API_KEY`, then pick `gpt-4o-mini` — note that findings then leave the machine. Both benefit from `pip install -e ".[llm]"` for CrewAI. `/api/v1/health` reports
+`llm.provider`/`reachable`/`model_available`/`crewai_installed`. Without them, explanations fall back to deterministic
 templates and tests to the sandbox-observed characterization strategy.
 
 ### Sample repositories (bundled, realistic)
@@ -65,8 +68,9 @@ resources, so rightsizing findings come with an IaC patch). Regenerate dumps wit
 1. **Add services** → pick a sample (`fixture:demo-shop`, `fixture:orders-api`) or any public GitHub repo, e.g.
    `https://github.com/we45/Vulnerable-Flask-App`, and choose the AWS cost data dump.
 2. Open the project → **Run scan**. Watch live progress and agent logs (Server-Sent Events).
-3. Open a finding → evidence, explanation, the proposed diff and guardrail checks → **Approve fix** →
-   **Apply to isolated branch & verify**.
+3. Open a finding → evidence, explanation, the proposed diff and guardrail checks → **Fix & open PR** (one click:
+   approve → apply → verify → draft PR), or step through it manually with **Approve fix** →
+   **Apply to isolated branch & verify** → **Push branch & open PR**.
    The patch is committed to an isolated local branch (`skyforge/fix-…`) in a git worktree and re-verified
    (OSV re-query, sandbox test run, Ruff re-check, Terraform syntax, or secret re-scan).
 4. Explore Security, Testing, AWS Optimization, Code Health, Agent Center and Settings & Audit.
@@ -85,6 +89,13 @@ plus *Administration* write if you want SkyForge to create repos/forks; or a cla
 
 The token is only passed to git through environment config (never in arguments, logs or the DB); every push is
 audited. `POST /api/v1/findings/{id}/pull-request {"proposal_id": …}` is idempotent.
+
+**One-click Fix.** `POST /api/v1/findings/{id}/fix {"proposal_id": …}` runs the whole chain from a single human
+action: guardrail re-validation + approval (recorded against your principal), apply to a `skyforge/fix-…` branch,
+verification, then the draft PR. Nothing is relaxed — a guardrail rejection stops it, and the PR is only opened if
+verification passes (otherwise `verification.pull_request_error` explains why). For a **Unit Test & Coverage**
+finding this means one click generates the tests, proves they pass with measured coverage in the sandbox, and opens
+a draft PR whose body lists the before/after coverage and the functions the new tests now exercise.
 
 ## Architecture
 
@@ -122,7 +133,8 @@ verified | verification_failed`.
   declared-vs-actual files, size limits, dangerous content, secrets, prompt-injection text, version-only dependency
   edits, `git apply --check`, post-apply syntax checks. Re-run at approval and again at apply time.
 - Merges and infrastructure changes are never performed. Pushing a fix branch and opening a **draft** PR happens only
-  when a human clicks *Push branch & open PR* on an approved + verified fix (never force-push, never the default branch).
+  when a human clicks *Push branch & open PR* or *Fix & open PR* on a validated fix (never force-push, never the
+  default branch, never without a recorded approval and a passing verification).
 - AWS access is read-only by construction (only Describe/Get/List calls), with region and service allow-lists.
 
 ## API
@@ -130,7 +142,7 @@ verified | verification_failed`.
 All under `/api/v1` (OpenAPI at `/api/docs`): `health`, `dashboard/summary`, `projects` (CRUD),
 `projects/{id}/scans`, `scans/{id}`, `scans/{id}/events` (SSE, `?stream=false` for JSON), `scans/{id}/cancel`,
 `scans/{id}/artifacts/{artifact_id}`, `findings` (filter/sort/paginate/facets), `findings/{id}`,
-`findings/{id}/review`, `findings/{id}/remediate`, `findings/{id}/pull-request`, `agents`, `agents/{id}/runs`, `projects/{id}/aws/resources`,
+`findings/{id}/review`, `findings/{id}/remediate`, `findings/{id}/fix`, `findings/{id}/pull-request`, `agents`, `agents/{id}/runs`, `projects/{id}/aws/resources`,
 `projects/{id}/aws/cost`, `projects/{id}/aws/source` (PUT, pick a bundled dump), `projects/{id}/aws/dump`
 (POST zip upload), `aws/dumps`, `projects/{id}/quality`, `test-runs`, `settings`, `audit`.
 
@@ -150,13 +162,16 @@ cd frontend && npm run build        # tsc + vite
 - Spend comes from the dump's CUR lines; savings combine that spend with static on-demand list prices and are
   labelled estimates. The bundled dumps are realistic samples, not a real account — upload your own export for real
   numbers.
-- Local LLMs are slow: a full scan with gemma3 takes a few minutes (explanations + drafted tests).
+- Local LLMs are slow: a full scan with gemma3 takes a few minutes (explanations + drafted tests). Switching to
+  OpenAI `gpt-4o-mini` in Settings is faster but sends finding summaries to the OpenAI API.
 - Rate limiting and the worker pool are in-process (single instance). Use PostgreSQL via `DATABASE_URL` for deployment.
 - Pull requests are GitHub-only (GitLab/Bitbucket: download the patch artifact).
 
 ## Troubleshooting
 
 - *"Docker sandbox unavailable"* — start Docker Desktop; the first sandboxed run pulls `python:3.11-slim`.
-- *LLM offline* — `ollama serve` and `ollama pull gemma3`, or set another model in Settings.
+- *LLM offline* — `ollama serve` and `ollama pull gemma3`, or set another model/provider in Settings.
+- *OpenAI "not set"* — paste the key in Settings → Model provider, or export the env var named by
+  `OPENAI_API_KEY_ENV` (default `OPENAI_API_KEY`) and restart the API. A key saved in Settings wins over the env var.
 - *Repository rejected* — only https URLs on `ALLOWED_GIT_HOSTS` (or `fixture:<name>`) are accepted.
 - *Proposal "stale" on approve* — the workspace changed since the scan; re-scan the project.

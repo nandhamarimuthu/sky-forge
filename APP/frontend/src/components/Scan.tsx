@@ -45,7 +45,7 @@ export function ScanDialog({ project, open, onClose, onStarted }: { project: Pro
         <div className="field" style={{ marginTop: 14 }}>
           <span>Options</span>
           <div className="chips">
-            {([["execute_tests", "Execute tests in Docker sandbox"], ["generate_tests", "Generate tests"], ["use_llm", "Use local LLM (Ollama)"]] as const).map(([k, l]) => (
+            {([["execute_tests", "Execute tests in Docker sandbox"], ["generate_tests", "Generate tests"], ["use_llm", "Use LLM assistance"]] as const).map(([k, l]) => (
               <label key={k} className={`toggle ${opts[k] ? "on" : ""}`} style={{ ["--c" as any]: "var(--orchid)", ["--t" as any]: "var(--orchid-t)" }}>
                 <input type="checkbox" hidden checked={opts[k]} onChange={() => toggle(k)} />
                 <span className="sw" />

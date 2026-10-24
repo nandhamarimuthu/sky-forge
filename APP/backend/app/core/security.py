@@ -89,6 +89,7 @@ SECRET_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("slack_token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b")),
     ("google_api_key", re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b")),
     ("stripe_key", re.compile(r"\b(sk|rk)_(live|test)_[0-9a-zA-Z]{24,}\b")),
+    ("openai_key", re.compile(r"\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}\b")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
     ("generic_secret_assignment", re.compile(
         r"(?i)[A-Za-z0-9_]*(password|passwd|secret|api_?key|access_?token|auth_?token|client_?secret)[A-Za-z0-9_]*"

@@ -50,7 +50,7 @@ export function AppLayout({ user, onLogout }: { user: { name: string; role: stri
           <div className="side-card-title">Runtime</div>
           <div className="side-row">
             <span className={`pulse ${health?.llm?.model_available ? "" : health?.llm?.reachable ? "warn" : "off"}`} />
-            Ollama · {health?.llm?.model ?? "…"} {!health?.llm?.reachable && <em style={{ color: "#A86A00", background: "var(--sun-t)" }}>offline</em>}
+            {health?.llm?.provider === "openai" ? "OpenAI" : "Ollama"} · {health?.llm?.model ?? "…"} {!health?.llm?.reachable && <em style={{ color: "#A86A00", background: "var(--sun-t)" }}>offline</em>}
           </div>
           <div className="side-row"><span className={`pulse ${health?.sandbox ? "" : "off"}`} />Docker sandbox {!health?.sandbox && <em style={{ color: "#A86A00", background: "var(--sun-t)" }}>off</em>}</div>
           <div className="side-row"><span className="pulse" />AWS · <em>{health?.aws_mode === "live" ? "read-only" : "data dump"}</em></div>

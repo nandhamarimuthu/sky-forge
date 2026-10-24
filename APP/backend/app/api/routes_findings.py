@@ -134,6 +134,22 @@ def remediate(finding_id: str, body: RemediateRequest, request: Request, db: Ses
     return ProposalOut.model_validate(prop)
 
 
+@router.post("/{finding_id}/fix", response_model=ProposalOut, status_code=status.HTTP_202_ACCEPTED)
+def fix(finding_id: str, body: RemediateRequest, request: Request, db: Session = Depends(get_db),
+        principal: Principal = Depends(require("remediation:apply")),
+        c: Container = Depends(container)) -> ProposalOut:
+    """One-click fix: approve, apply on an isolated branch, verify, then open a draft pull request."""
+    f = _load(db, principal, finding_id, request)
+    prop = next((p for p in f.proposals if p.id == body.proposal_id), None)
+    if prop is None:
+        raise ApiError(404, "not_found", "Proposal not found for this finding")
+    if not publish.publish_enabled(c):
+        raise ApiError(422, "github_token_missing",
+                       f"Set {c.settings.github_token_env} on the server to let Fix open a pull request")
+    remediation.one_click_fix(db, c, f, prop, principal, body.comment, client_ip(request))
+    return ProposalOut.model_validate(prop)
+
+
 @router.post("/{finding_id}/pull-request")
 def pull_request(finding_id: str, body: RemediateRequest, request: Request, db: Session = Depends(get_db),
                  principal: Principal = Depends(require("remediation:apply")),

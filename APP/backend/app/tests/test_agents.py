@@ -105,6 +105,69 @@ def test_unit_test_agent_without_sandbox_fails_closed(fixture_ws):
     assert any(f.category == "coverage" for f in res.findings)
 
 
+def test_unit_test_agent_suggests_where_to_improve_coverage(fixture_ws):
+    ctx, _ = make_ctx(fixture_ws, "unit_test")
+    res = AGENTS["unit_test"].run(ctx)
+    module = next(f for f in res.findings if f.rule_id == "coverage:module")
+    assert "Where to improve coverage in" in module.recommendation
+    targets = module.evidence["coverage_targets"]
+    assert targets and all({"function", "line", "uncovered_lines"} <= set(t) for t in targets)
+
+    roadmap = next(f for f in res.findings if f.rule_id == "coverage:roadmap")
+    assert roadmap.severity == "info" and roadmap.target == "repository"
+    assert "Improve coverage in this order" in roadmap.recommendation
+    assert roadmap.evidence["modules"] and roadmap.evidence["modules"][0]["start_with"]
+    assert res.metrics["modules_needing_coverage"] >= 1
+
+
+def test_coverage_line_ranges_and_gap_ranking():
+    from app.adapters.scanners.code_metrics import FunctionInfo
+    from app.agents.unit_test_agent import function_gaps, line_ranges
+
+    assert line_ranges([3, 1, 2, 7, 8, 20]) == "1-3, 7-8, 20"
+    assert line_ranges([]) == ""
+    simple = FunctionInfo("a", "a", "m.py", 1, 5, 1, [], False, False, [], None, None)
+    complex_fn = FunctionInfo("b", "b", "m.py", 10, 20, 9, [], False, False, [], None, None)
+    gaps = function_gaps([simple, complex_fn], [2, 3, 11, 12, 13])
+    assert [g.function.name for g in gaps] == ["b", "a"]  # higher complexity × more lines ranks first
+    assert gaps[0].missing == [11, 12, 13]
+
+
+def test_route_handlers_are_testable_but_context_and_global_state_are_not(tmp_path):
+    import threading
+
+    from app.adapters.repository.git_repo import RepoWorkspace
+    from app.adapters.scanners.code_metrics import analyse_python_module
+    from app.agents.base import AgentContext
+    from app.agents.unit_test_agent import GENERATED_DIR, build_cases, generated_test_path, is_route_handler
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "svc.py").write_text(
+        "from flask import Flask, request\n"
+        "app = Flask(__name__)\n"
+        "store = []\n\n"
+        "@app.route('/hi')\n"
+        "def hi():\n    return 'hi'\n\n"
+        "@app.route('/n/<int:item_id>')\n"
+        "def pick(item_id):\n    return item_id * 2\n\n"
+        "@app.route('/items')\n"
+        "def listing():\n    return {'items': store}\n\n"
+        "@app.route('/add', methods=['POST'])\n"
+        "def take():\n    return request.get_json()\n\n"
+        "@app.cli.command('seed')\n"
+        "def seed():\n    return 1\n", encoding="utf-8")
+    ws = RepoWorkspace(tmp_path)
+    fns = analyse_python_module(ws, tmp_path / "svc.py").functions
+    ctx = AgentContext(scan_id="s", project={}, workspace=ws, options={}, tools={}, allowed_tools=frozenset(),
+                       emit=lambda *a, **k: None, cancel_event=threading.Event())
+    names = {f.name for f in AGENTS["unit_test"]._candidates(ctx, fns, set(), set())}
+    assert names == {"hi", "pick"}, names  # listing reads a mutable global, take needs a request context
+    assert is_route_handler(next(f for f in fns if f.name == "hi"))
+    # Unannotated `item_id` is inferred as an int, so representative cases can be built.
+    assert build_cases(next(f for f in fns if f.name == "pick"))
+    assert generated_test_path("app.routes") == f"{GENERATED_DIR}/test_app_routes.py"
+
+
 def test_functional_agent_generates_suite(fixture_ws):
     ctx, _ = make_ctx(fixture_ws, "functional_test")
     res = AGENTS["functional_test"].run(ctx)

@@ -35,6 +35,8 @@ class SandboxResult:
     coverage_percent: float | None = None
     coverage_files: dict[str, float] = field(default_factory=dict)
     missing_lines: dict[str, list[int]] = field(default_factory=dict)
+    statements: dict[str, int] = field(default_factory=dict)
+    missing_counts: dict[str, int] = field(default_factory=dict)
     duration_s: float = 0.0
     failures: list[dict] = field(default_factory=list)
     log_tail: str = ""
@@ -163,6 +165,9 @@ class DockerSandbox:
                         continue
                     res.coverage_files[f] = round(float(meta["summary"]["percent_covered"]), 1)
                     res.missing_lines[f] = list(meta.get("missing_lines", []))[:400]
+                    res.statements[f] = int(meta["summary"].get("num_statements", 0))
+                    res.missing_counts[f] = int(meta["summary"].get("missing_lines",
+                                                                    len(meta.get("missing_lines", []))))
             except (KeyError, ValueError, json.JSONDecodeError):
                 pass
         if code == 5 or (res.total == 0 and junit.exists()):
