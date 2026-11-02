@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SkyForge AI</title>
+<style>
+  :root{--ink:#1C1838;--tomato:#FF5A5A;--cobalt:#4361EE;--orchid:#9157FF;--teal:#0EB5A8;--sun:#FFAE1A;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1920px;height:1080px;overflow:hidden}
+  body{
+    font-family:-apple-system,"Helvetica Neue",Inter,system-ui,sans-serif;
+    background:radial-gradient(1100px 760px at 50% 30%, #2C2560 0%, transparent 62%),
+               linear-gradient(140deg,#14112E 0%,#1C1838 55%,#241E46 100%);
+    color:#fff;display:grid;place-items:center;
+  }
+  .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:72px 72px;mask-image:radial-gradient(900px 600px at 50% 45%,#000 10%,transparent 85%)}
+  .wrap{position:relative;text-align:center;width:1500px}
+  .brand{display:flex;align-items:center;justify-content:center;gap:22px;opacity:0;transform:translateY(26px);animation:up .9s .1s forwards}
+  .brand img{width:108px;height:108px;filter:drop-shadow(0 10px 34px rgba(145,87,255,.6))}
+  .brand .n{font-size:4.4rem;font-weight:800;letter-spacing:-.03em}
+  .brand .n span{background:linear-gradient(90deg,var(--orchid),var(--cobalt));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .tag{margin-top:18px;font-size:1.7rem;color:#B9B4D6;letter-spacing:.14em;text-transform:uppercase;opacity:0;transform:translateY(22px);animation:up .9s .6s forwards}
+  .stats{display:flex;gap:26px;justify-content:center;margin-top:70px}
+  .s{flex:1;max-width:400px;padding:34px 26px;border-radius:22px;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.13);backdrop-filter:blur(8px);opacity:0;transform:translateY(28px);animation:up .8s forwards}
+  .s:nth-child(1){animation-delay:1.2s}.s:nth-child(2){animation-delay:1.6s}.s:nth-child(3){animation-delay:2.0s}
+  .s b{display:block;font-size:2.5rem;font-weight:800;letter-spacing:-.02em}
+  .s p{margin-top:10px;font-size:1.2rem;color:#B9B4D6;line-height:1.45}
+  .c1 b{color:var(--sun)}.c2 b{color:var(--teal)}.c3 b{color:var(--cobalt)}
+  @keyframes up{to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="wrap">
+    <div class="brand"><img src="logo.svg" alt="" /><div class="n">SkyForge <span>AI</span></div></div>
+    <p class="tag">Cloud &amp; Code Command</p>
+    <div class="stats">
+      <div class="s c1"><b>Onboard in seconds</b><p>Paste a repo. The organisation baseline applies itself.</p></div>
+      <div class="s c2"><b>One standard</b><p>Every team held to the same bar, continuously.</p></div>
+      <div class="s c3"><b>Fixes, pre-tested</b><p>Sandboxed, verified, raised as a draft PR for review.</p></div>
+    </div>
+  </div>
+</body>
+</html>
+

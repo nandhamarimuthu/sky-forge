@@ -80,12 +80,17 @@ export function CodeHealthPage() {
             <div className="card">
               <div className="card-head"><div><h2>Hotspots</h2><p className="muted">Churn × max complexity</p></div></div>
               {!m.hotspots?.length ? <Empty title="No hotspots" /> : (
-                <table className="table">
-                  <thead><tr><th>File</th><th>Churn</th><th>Max CC</th><th>Score</th></tr></thead>
-                  <tbody>{m.hotspots.map((h: any) => (
-                    <tr key={h.file}><td className="mono">{h.file}</td><td>{h.churn}</td><td>{h.max_complexity}</td><td><b>{h.score}</b></td></tr>
-                  ))}</tbody>
-                </table>
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead><tr><th>File</th><th>Churn</th><th>Max CC</th><th>Score</th></tr></thead>
+                    <tbody>{m.hotspots.map((h: any) => (
+                      <tr key={h.file}>
+                        <td className="mono truncate" title={h.file}>{h.file}</td>
+                        <td>{h.churn}</td><td>{h.max_complexity}</td><td><b>{h.score}</b></td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
               )}
             </div>
             <div className="card">

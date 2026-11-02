@@ -1,0 +1,39 @@
+1
+00:00:00,000 --> 00:00:16,583
+Every engineering organisation has the same blind spot. Dozens of services, and every team with its own standards. Vulnerabilities nobody has triaged. Tests nobody has written. Cloud spend nobody owns. This is SkyForge AI.
+
+2
+00:00:17,333 --> 00:00:32,237
+SkyForge is an organisation wide control plane. One command centre for every onboarded service: open vulnerabilities, test coverage, cloud spend and code health, trended over time. Not a report. A live baseline.
+
+3
+00:00:32,987 --> 00:00:45,323
+Onboarding is deliberately boring. Paste a repository, name the service, choose the agents. The same baseline applies to every service automatically. Standardisation by default.
+
+4
+00:00:46,073 --> 00:01:00,761
+Six specialist agents then go to work. Vulnerability remediation, security guardrails, unit and functional testing, cost optimisation, and code health. Each runs in a sandbox, and proposes a change a human must approve.
+
+5
+00:01:01,512 --> 00:01:13,367
+Security first. Every dependency is checked against the O S V database, while guardrails enforce secrets, code, pipeline and infrastructure policy, consistently across every project.
+
+6
+00:01:14,117 --> 00:01:27,149
+Open a finding and you get the whole story. What is wrong, why it matters, and the exact patch. SkyForge applies it in a sandbox, re runs the tests to prove nothing breaks, then opens a draft pull request.
+
+7
+00:01:27,899 --> 00:01:36,563
+The testing agents close the quality gap. They generate the missing tests, execute them for real, and report true pass rates and coverage movement.
+
+8
+00:01:37,313 --> 00:01:47,537
+The cost optimiser turns waste into numbers. Idle instances, unattached volumes and oversized databases, each with the calculation behind the saving, ready to action.
+
+9
+00:01:48,287 --> 00:01:58,271
+Code health makes maintainability a metric. Complexity, duplication and hotspots, scored per service, so refactoring effort goes where it actually pays.
+
+10
+00:01:59,021 --> 00:02:09,870
+Onboard in seconds. Hold every team to the same bar. Ship fixes that are already tested. SkyForge AI. Cloud and code command.

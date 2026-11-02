@@ -1,0 +1,3 @@
+# Regenerable build intermediates (audio clips, per-scene recordings, cut segments).
+build/
+

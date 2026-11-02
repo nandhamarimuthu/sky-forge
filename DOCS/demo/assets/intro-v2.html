@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SkyForge AI — intro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#ECE7F8; --surface:#FFFFFF; --ink:#1C1838; --ink-2:#4A4668; --muted:#807D9C;
+    --line:#E6E1F2; --line-2:#D6CEEA;
+    --tomato:#FF5A5A; --cobalt:#4361EE; --orchid:#9157FF; --teal:#0EB5A8; --sun:#FFAE1A;
+    --grad: linear-gradient(135deg, #FF5A5A 0%, #C655AE 52%, #9157FF 100%);
+    --shadow: 0 1px 2px rgba(28,24,56,.04), 0 14px 34px -16px rgba(91,63,180,.22);
+    --shadow-lg: 0 24px 60px -20px rgba(91,63,180,.35);
+    --display:"Bricolage Grotesque","DM Sans",system-ui,sans-serif;
+    --body:"DM Sans",system-ui,-apple-system,sans-serif;
+    --ease: cubic-bezier(.2,.8,.2,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden}
+  body{
+    font-family:var(--body);color:var(--ink);-webkit-font-smoothing:antialiased;
+    background:
+      radial-gradient(1000px 520px at 100% -10%, #FFC9D2 0, transparent 60%),
+      radial-gradient(900px 520px at 35% -18%, #D9C8FF 0, transparent 60%),
+      radial-gradient(800px 600px at 0% 100%, #FFE0EC 0, transparent 60%),
+      linear-gradient(180deg,#EFE9FB 0%,#E9E4F7 100%);
+    display:grid;place-items:center;
+  }
+  .blob{position:absolute;border-radius:50%;filter:blur(60px);opacity:.5;animation:float 14s ease-in-out infinite;pointer-events:none}
+  @keyframes float{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(40px,-30px) scale(1.08)}}
+
+  .wrap{position:relative;text-align:center;width:1560px}
+
+  .brand{display:flex;align-items:center;justify-content:center;gap:26px;margin-bottom:54px}
+  .logo-wrap{position:relative;width:112px;height:112px}
+  .logo-wrap img{width:112px;height:112px;border-radius:32px;box-shadow:0 24px 60px -18px rgba(198,85,174,.8);display:block}
+  .logo-wrap::after{content:"";position:absolute;inset:-14px;border-radius:44px;border:2px solid rgba(145,87,255,.35);animation:pulse 2.6s ease-out infinite}
+  @keyframes pulse{from{transform:scale(.92);opacity:1}to{transform:scale(1.25);opacity:0}}
+  .wordmark{font-family:var(--display);font-size:82px;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .wordmark em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+  h1{font-family:var(--display);font-size:76px;font-weight:800;line-height:1.08;letter-spacing:-.03em}
+  h1 em{font-style:normal;background:var(--grad);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 7s ease-in-out infinite}
+  @keyframes shimmer{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+
+  .lead{font-size:30px;color:var(--ink-2);margin-top:30px;line-height:1.45}
+
+  .pills{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-top:62px}
+  .pill{
+    display:flex;align-items:center;gap:14px;padding:20px 34px;border-radius:999px;
+    background:rgba(255,255,255,.92);border:1px solid rgba(214,206,234,.75);
+    box-shadow:var(--shadow);font-size:24px;font-weight:600;color:var(--ink-2);
+  }
+  .pill i{width:13px;height:13px;border-radius:50%;font-style:normal;flex:none}
+
+  /* entrance */
+  .a{opacity:0;transform:translateY(28px);animation:up .85s var(--ease) forwards;animation-delay:calc(var(--d,0)*120ms + 120ms)}
+  .a.pop{transform:scale(.72);animation-name:pop}
+  @keyframes up{to{opacity:1;transform:none}}
+  @keyframes pop{0%{opacity:0;transform:scale(.72)}70%{opacity:1;transform:scale(1.05)}100%{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+  <div class="blob" style="width:520px;height:520px;background:#D9C8FF;left:60px;top:90px"></div>
+  <div class="blob" style="width:460px;height:460px;background:#FFC9D2;right:90px;bottom:70px;animation-delay:-5s"></div>
+  <div class="blob" style="width:380px;height:380px;background:#CFE0FF;right:380px;top:40px;animation-delay:-9s"></div>
+
+  <div class="wrap">
+    <div class="brand a pop" style="--d:0">
+      <div class="logo-wrap"><img src="logo.svg" alt="" /></div>
+      <div class="wordmark">SkyForge <em>AI</em></div>
+    </div>
+
+    <h1 class="a" style="--d:2">Onboard every service. <em>Standardise every team.</em></h1>
+    <p class="lead a" style="--d:4">Make every service better, safer &amp; cheaper — six AI agents, human in the loop.</p>
+
+    <div class="pills">
+      <div class="pill a pop" style="--d:6"><i style="background:#9157FF"></i>6 autonomous agents</div>
+      <div class="pill a pop" style="--d:7"><i style="background:#FF5A5A"></i>Sandbox-verified fixes</div>
+      <div class="pill a pop" style="--d:8"><i style="background:#0EB5A8"></i>Human approval gate</div>
+      <div class="pill a pop" style="--d:9"><i style="background:#FFAE1A"></i>Draft pull requests</div>
+    </div>
+  </div>
+</body>
+</html>
+
