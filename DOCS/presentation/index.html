@@ -98,16 +98,185 @@
   .core::after { content: ""; position: absolute; inset: -16px; border-radius: 56px; border: 2px solid rgba(145, 87, 255, .35); animation: pulse 2.6s ease-out infinite; }
   @keyframes pulse { from { transform: scale(.92); opacity: 1; } to { transform: scale(1.25); opacity: 0; } }
 
-  /* 2 — problem */
-  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin: auto 0; }
-  .pcard { padding: 34px 30px; position: relative; overflow: hidden; min-height: 330px; display: flex; flex-direction: column; }
-  .pcard .ico { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; margin-bottom: 28px; }
-  .pcard .ico svg { width: 32px; height: 32px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .pcard h3 { font-size: 28px; margin-bottom: 12px; }
-  .pcard p { font-size: 18px; color: var(--ink-2); line-height: 1.45; }
-  .pcard .bar { position: absolute; left: 0; bottom: 0; height: 6px; width: 0; }
+  /* 2 — problem (animatic) */
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin: 34px 0 0; }
+  .pcard { padding: 26px 24px 28px; position: relative; overflow: hidden; min-height: 352px;
+           display: grid; grid-template-rows: auto 146px auto; row-gap: 16px; }
+  .pcard .phead { display: flex; align-items: center; gap: 13px; }
+  .pcard .ico { width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center; flex: none; }
+  .pcard .ico svg { width: 26px; height: 26px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .pcard h3 { font-size: 22px; line-height: 1.15; }
+  .pcard p { font-size: 16px; color: var(--ink-2); line-height: 1.45; }
+  .pcard .bar { position: absolute; left: 0; bottom: 0; height: 5px; width: 0; }
   .slide.active .pcard .bar { animation: grow 1.4s var(--ease) forwards; animation-delay: calc(var(--d) * 110ms + 600ms); }
   @keyframes grow { to { width: 100%; } }
+
+  /* shared mini-viz frame */
+  .viz2 { display: grid; grid-template-rows: auto 1fr; row-gap: 12px; min-height: 0; }
+  .vhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .vlabel { font: 700 10px var(--mono); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+  .vnum { font: 800 24px var(--display); letter-spacing: -.02em; line-height: 1; white-space: nowrap; }
+  .vbody { position: relative; min-height: 0; }
+  .vspark { width: 100%; height: 100%; overflow: visible; }
+  .vspark path, .vspark line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .vspark .ghost { stroke: var(--line-2); stroke-width: 2; stroke-dasharray: 5 6; vector-effect: non-scaling-stroke; }
+  .vspark .area { fill: url(#dbt); stroke: none; }
+
+  /* 1 · risk piles up — advisories stack higher and higher */
+  .stack { position: absolute; inset: 0; display: flex; flex-direction: column-reverse; justify-content: flex-start; gap: 6px; }
+  .stack i { height: 13px; flex: none; border-radius: 5px; background: var(--tomato); opacity: 0; transform-origin: left center; }
+  .slide.active .stack i { animation: brickIn 6s var(--ease) infinite; animation-delay: calc(var(--k) * 480ms + 400ms); }
+  @keyframes brickIn {
+    0%        { opacity: 0; transform: translateY(16px) scaleX(.5); }
+    7%, 88%   { opacity: 1; transform: none; }
+    97%, 100% { opacity: 0; transform: translateY(-8px) scaleX(.9); }
+  }
+
+  /* 2 · tests lag behind — code climbs while coverage slides */
+  .slide.active .vspark .draw { animation: drawLoop 6s var(--ease) infinite; }
+  @keyframes drawLoop {
+    0%      { stroke-dashoffset: 320; }
+    45%     { stroke-dashoffset: 0; }
+    88%     { stroke-dashoffset: 0; }
+    100%    { stroke-dashoffset: -320; }
+  }
+  .vspark .draw { stroke-dasharray: 320; stroke-dashoffset: 320; }
+  .vspark .tip { stroke: none; }
+  .slide.active .vspark .tip { animation: tipFade 6s var(--ease) infinite; }
+  @keyframes tipFade { 0%, 36% { opacity: 0; } 48%, 86% { opacity: 1; } 96%, 100% { opacity: 0; } }
+
+  /* 3 · cloud spend drifts — bars creep up, idle share on top */
+  .bars { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 7px; }
+  .bars i { flex: 1; height: 0; border-radius: 6px 6px 3px 3px;
+            background: linear-gradient(180deg, var(--sun-t) 0 38%, var(--sun) 38% 100%); }
+  .slide.active .bars i { animation: barUp 6s var(--ease) infinite; animation-delay: calc(var(--k) * 300ms + 400ms); }
+  @keyframes barUp {
+    0%        { height: 0; }
+    16%, 88%  { height: var(--h); }
+    100%      { height: 0; }
+  }
+
+  /* 4 · debt compounds — the curve steepens */
+  .slide.active .growArea { animation: areaUp 6s var(--ease) infinite; }
+  .growArea { transform-box: fill-box; transform-origin: bottom; }
+  @keyframes areaUp {
+    0%        { transform: scaleY(.06); opacity: 0; }
+    10%       { opacity: 1; }
+    46%, 88%  { transform: scaleY(1); opacity: 1; }
+    100%      { transform: scaleY(.06); opacity: 0; }
+  }
+
+  /* compounding timeline under the four cards */
+  .worse { margin-top: 22px; display: flex; align-items: center; gap: 22px; padding: 18px 28px; }
+  .worse .wt { font: 700 14px var(--body); white-space: nowrap; }
+  .worse .wt small { display: block; font: 600 11px var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
+  .worse .wline { position: relative; flex: 1; height: 5px; border-radius: 5px; background: var(--line-2); }
+  .worse .wline::after { content: ""; position: absolute; inset: 0; border-radius: 5px; transform: scaleX(0); transform-origin: left;
+                         background: linear-gradient(90deg, var(--mint) 0%, var(--sun) 48%, var(--tomato) 100%); }
+  .slide.active .worse .wline::after { animation: track 3.4s var(--ease) 1.1s forwards; }
+  .worse .wdot { position: absolute; top: 50%; left: 0; width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px; border-radius: 50%;
+                 background: #fff; border: 3px solid var(--tomato); box-shadow: 0 0 0 6px rgba(255, 90, 90, .14); }
+  .slide.active .worse .wdot { animation: wdrift 3.4s var(--ease) 1.1s forwards; }
+  @keyframes wdrift { to { left: 100%; } }
+
+  /* 2b — scattered vs one workflow (animatic) */
+  .ba { display: grid; grid-template-columns: 1fr 112px 1fr; align-items: stretch; height: 470px; margin: 26px 0 auto; }
+  .ba-pane { padding: 24px 26px; display: grid; grid-template-rows: auto 1fr auto; row-gap: 16px; position: relative; overflow: hidden; }
+  .ba-pane.old { background: linear-gradient(180deg, #FFF 0%, #FFFAFA 100%); }
+  .ba-pane.new { background: linear-gradient(180deg, #FFF 0%, #FBF8FF 100%); }
+  .ba-head { display: flex; align-items: baseline; gap: 10px; min-height: 32px; }
+  .ba-head .tagx { font: 700 11px var(--mono); letter-spacing: .16em; color: var(--muted); text-transform: uppercase; }
+  .ba-head h3 { font-size: 22px; letter-spacing: -.015em; }
+  .ba-head .pillx { margin-left: auto; align-self: center; font: 600 12px var(--body); padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+
+  /* bottom score boxes — identical on both sides so the panes line up */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat { border-radius: 14px; padding: 13px 8px 12px; text-align: center; }
+  .stat .sv { font: 800 27px var(--display); line-height: 1; letter-spacing: -.02em; }
+  .stat .sc { font: 600 11px var(--body); margin-top: 5px; line-height: 1.25; }
+  .stats.bad .stat { background: var(--tomato-t); } .stats.bad .sv { color: #D63C3C; } .stats.bad .sc { color: #B74141; }
+  .stats.good .stat { background: var(--mint-t); } .stats.good .sv { color: #0E9F6E; } .stats.good .sc { color: #138A62; }
+
+  /* PROBLEM — six tools, touched one at a time */
+  .chaos { position: relative; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); gap: 11px; }
+  .tool { position: relative; z-index: 1; border-radius: 14px; background: #fff; box-shadow: var(--shadow); padding: 12px 15px;
+          display: flex; flex-direction: column; justify-content: center; gap: 5px; transform-origin: center; opacity: .45; }
+  .slide.active .tool { animation: serial 7.2s var(--ease) infinite; animation-delay: calc(var(--i) * 1.2s); }
+  @keyframes serial {
+    0%        { opacity: .45; transform: none; }
+    3%, 14%   { opacity: 1;   transform: translateY(-4px); }
+    18%, 100% { opacity: .45; transform: none; }
+  }
+  .tool .tn { font: 700 15px var(--body); line-height: 1.2; display: flex; align-items: center; gap: 8px; }
+  .tool .tn i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+  .tool .tp { font: 500 11px var(--mono); color: var(--muted); letter-spacing: -.01em; }
+  .tool .ix { position: absolute; right: 11px; top: 10px; font: 700 10px var(--mono); color: #D63C3C; background: var(--tomato-t);
+              border-radius: 999px; padding: 2px 6px; }
+  /* the marker that has to walk from platform to platform */
+  .hop { position: absolute; z-index: 3; width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--tomato);
+         box-shadow: 0 0 0 6px rgba(255, 90, 90, .14); left: 25%; top: 16.7%; }
+  .slide.active .hop { animation: hop 7.2s var(--ease) infinite; }
+  @keyframes hop {
+    0%, 13%   { left: 25%; top: 16.7%; }
+    17%, 30%  { left: 75%; top: 16.7%; }
+    33%, 46%  { left: 25%; top: 50%; }
+    50%, 63%  { left: 75%; top: 50%; }
+    67%, 80%  { left: 25%; top: 83.3%; }
+    83%, 100% { left: 75%; top: 83.3%; }
+  }
+
+  /* morph arrow */
+  .morph { display: grid; place-items: center; position: relative; }
+  .morph .pill2 { position: relative; z-index: 1; width: 62px; height: 62px; border-radius: 50%; background: var(--grad); display: grid; place-items: center;
+                  box-shadow: 0 16px 34px -12px rgba(198, 85, 174, .8); }
+  .morph .pill2 svg { width: 26px; height: 26px; stroke: #fff; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .slide.active .morph .pill2 { animation: beat 2.4s var(--ease) 1.5s infinite; }
+  @keyframes beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+  /* SOLUTION — six agents orbit, then spiral slowly into the core */
+  .unify { position: relative; display: grid; place-items: center; }
+  .unify .hub { width: 100px; height: 100px; border-radius: 30px; overflow: hidden; position: relative; z-index: 3;
+                box-shadow: 0 22px 46px -14px rgba(198, 85, 174, .6); }
+  .unify .hub img { width: 100%; height: 100%; display: block; }
+  .unify .hub::after { content: ""; position: absolute; inset: 0; border-radius: 30px; box-shadow: 0 0 0 0 rgba(145, 87, 255, 0); }
+  .slide.active .unify .hub::after { animation: absorb 11s var(--ease) 1s infinite; }
+  @keyframes absorb {
+    0%, 66%   { box-shadow: 0 0 0 0 rgba(145, 87, 255, 0); }
+    74%       { box-shadow: 0 0 0 18px rgba(145, 87, 255, .16); }
+    84%, 100% { box-shadow: 0 0 0 0 rgba(145, 87, 255, 0); }
+  }
+
+  /* dashed orbit paths */
+  .orbit-path { position: absolute; left: 50%; top: 50%; width: 236px; height: 236px; margin: -118px; border-radius: 50%;
+                border: 1.5px dashed var(--line-2); z-index: 0; pointer-events: none; }
+  .orbit-path.inner { width: 160px; height: 160px; margin: -80px; border-color: rgba(214, 206, 234, .5); }
+  .slide.active .orbit-path { animation: spin 52s linear infinite; }
+  .slide.active .orbit-path.inner { animation-duration: 38s; animation-direction: reverse; }
+
+  /* orbiter = rotating arm · label counter-rotates so it stays upright */
+  .orbiter { --r: 118px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; z-index: 1; }
+  .slide.active .orbiter { animation: orbitSpin 24s linear infinite; animation-delay: calc(var(--i) * -4s); }
+  @keyframes orbitSpin { to { transform: rotate(360deg); } }
+  .arm { position: absolute; left: 0; top: 0; transform: translateX(var(--r)); }
+  .slide.active .arm { animation: spiralIn 11s var(--ease) 1s infinite; }
+  @keyframes spiralIn {
+    0%, 36%   { transform: translateX(var(--r)) scale(1); opacity: 1; }
+    70%       { transform: translateX(0) scale(.35); opacity: 0; }
+    71%       { transform: translateX(var(--r)) scale(.6); opacity: 0; }
+    86%, 100% { transform: translateX(var(--r)) scale(1); opacity: 1; }
+  }
+  .orb { position: absolute; left: 0; top: 0; width: 132px; height: 28px; margin: -14px -66px; border-radius: 999px; background: #fff;
+         display: flex; align-items: center; justify-content: center; gap: 8px; font: 700 12px var(--body); color: var(--ink-2); white-space: nowrap; }
+  .orb i { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; }
+  .slide.active .orb { animation: counterSpin 24s linear infinite; animation-delay: calc(var(--i) * -4s); }
+  @keyframes counterSpin { to { transform: rotate(-360deg); } }
+
+  .slide.active .stats.good .stat { animation: okpop 11s var(--ease) 1s infinite; animation-delay: calc(1s + var(--i) * 120ms); }
+  @keyframes okpop {
+    0%, 68%   { box-shadow: 0 0 0 0 rgba(22, 196, 127, 0); }
+    78%       { box-shadow: 0 0 0 5px rgba(22, 196, 127, .18); }
+    90%, 100% { box-shadow: 0 0 0 0 rgba(22, 196, 127, 0); }
+  }
 
   /* 3 — flow */
   .flow { display: flex; align-items: center; justify-content: space-between; margin-top: auto; margin-bottom: auto; position: relative; }
@@ -220,6 +389,7 @@
   .kpi { padding: 30px 28px 104px; position: relative; overflow: hidden; }
   .kpi .k { font: 700 13px var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
   .kpi .v { font: 800 64px var(--display); margin-top: 10px; line-height: 1; }
+  .kpi .v em { font: 700 19px var(--body); font-style: normal; color: var(--muted); margin-left: 9px; letter-spacing: 0; }
   .kpi .s { font-size: 15px; color: var(--muted); margin-top: 10px; }
   .kpi .spark { position: absolute; right: 0; bottom: 0; width: 100%; height: 70px; opacity: .9; }
   .kpi .spark path { fill: none; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 600; stroke-dashoffset: 600; }
@@ -229,6 +399,38 @@
   .timeline .t { flex: 1; display: flex; align-items: center; gap: 12px; font: 600 17px var(--body); }
   .timeline .t b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 13px var(--mono); flex: none; }
   .timeline .sep { width: 40px; height: 2px; background: var(--line-2); margin: 0 10px; }
+
+  /* tech-debt capacity — one square = one effort day */
+  .sprint { margin-top: 22px; padding: 24px 30px 20px; }
+  .srow { display: grid; grid-template-columns: 178px 1fr 164px; align-items: center; gap: 20px; }
+  .srow + .srow { margin-top: 14px; }
+  .srow .slab { font: 700 17px var(--body); }
+  .srow .slab small { display: block; font: 600 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+  .srow .sout { text-align: right; font: 700 16px var(--body); line-height: 1.2; }
+  .srow .sout small { display: block; font: 600 11px var(--body); color: var(--muted); margin-top: 3px; }
+  .days { display: grid; grid-template-columns: repeat(20, 1fr); gap: 6px; }
+  .day { height: 44px; border-radius: 8px; background: var(--line); position: relative; opacity: 0; transform: scale(.72); }
+  .slide.active .day { animation: dayIn .45s var(--ease) forwards;
+                       animation-delay: calc(var(--n) * 38ms + var(--row) * 1000ms + 700ms); }
+  @keyframes dayIn { to { opacity: 1; transform: none; } }
+  .day.vuln   { background: var(--tomato); }
+  .day.test   { background: var(--cobalt); }
+  .day.func   { background: var(--teal); }
+  .day.health { background: var(--orchid); }
+  .day.policy { background: var(--pink); }
+  .day.prod   { background: var(--mint); }
+  /* the effort days handed back get a halo once both rows have drawn */
+  .day.back::after { content: ""; position: absolute; inset: -4px; border-radius: 12px; border: 2px dashed var(--mint); opacity: 0; }
+  .slide.active .day.back::after { animation: backRing 2.8s var(--ease) infinite; animation-delay: calc(2.9s + var(--n) * 38ms); }
+  @keyframes backRing {
+    0%, 68%   { opacity: 0; transform: scale(.9); }
+    80%       { opacity: 1; transform: scale(1); }
+    100%      { opacity: 0; transform: scale(1.14); }
+  }
+  .slegend { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .slegend span { display: flex; align-items: center; gap: 7px; font: 600 12px var(--body); color: var(--ink-2); }
+  .slegend i { width: 11px; height: 11px; border-radius: 4px; flex: none; }
+  .slegend .gain { margin-left: auto; font: 700 14px var(--body); color: #0E9F6E; background: var(--mint-t); border-radius: 999px; padding: 7px 14px; }
 
   /* demo video */
   .demo { display: grid; grid-template-columns: 360px 1fr; gap: 50px; align-items: center; margin: auto 0; }
@@ -312,30 +514,188 @@
     <div class="eyebrow a" style="--d:0">The challenge</div>
     <h2 class="title a" style="--d:1">Dozens of services. Every team with <span class="grad-text">its own standards</span>.</h2>
     <div class="grid4">
+
+      <!-- risk -->
       <div class="card pcard a" style="--d:2">
-        <div class="ico" style="background:var(--tomato-t)"><svg viewBox="0 0 24 24" stroke="#FF5A5A"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16h.01"/></svg></div>
-        <h3>Risk piles up</h3><p>Vulnerable dependencies and policy gaps age quietly in every repo.</p>
+        <div class="phead">
+          <div class="ico" style="background:var(--tomato-t)"><svg viewBox="0 0 24 24" stroke="#FF5A5A"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16h.01"/></svg></div>
+          <h3>Risk piles up</h3>
+        </div>
+        <div class="viz2">
+          <div class="vhead">
+            <span class="vlabel">Open advisories</span>
+            <span class="vnum" style="color:#D63C3C"><span data-count="37">0</span>+</span>
+          </div>
+          <div class="vbody">
+            <div class="stack">
+              <i style="--k:0;width:38%"></i>
+              <i style="--k:1;width:52%"></i>
+              <i style="--k:2;width:61%"></i>
+              <i style="--k:3;width:78%"></i>
+              <i style="--k:4;width:92%"></i>
+              <i style="--k:5;width:100%"></i>
+            </div>
+          </div>
+        </div>
+        <p>Vulnerable dependencies and policy gaps age quietly in every repo.</p>
         <div class="bar" style="background:var(--tomato)"></div>
       </div>
+
+      <!-- tests -->
       <div class="card pcard a" style="--d:3">
-        <div class="ico" style="background:var(--cobalt-t)"><svg viewBox="0 0 24 24" stroke="#4361EE"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></div>
-        <h3>Tests lag behind</h3><p>Coverage falls as code grows; journeys go untested.</p>
+        <div class="phead">
+          <div class="ico" style="background:var(--cobalt-t)"><svg viewBox="0 0 24 24" stroke="#4361EE"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></div>
+          <h3>Tests lag behind</h3>
+        </div>
+        <div class="viz2">
+          <div class="vhead">
+            <span class="vlabel">Line coverage</span>
+            <span class="vnum" style="color:var(--cobalt)"><span data-count="54">0</span>%</span>
+          </div>
+          <div class="vbody">
+            <svg class="vspark" viewBox="0 0 200 100" preserveAspectRatio="none">
+              <line class="ghost" x1="0" y1="26" x2="200" y2="26"/>
+              <path class="ghost" d="M4 92 C 60 76, 120 50, 196 10"/>
+              <path class="draw" stroke="#4361EE" d="M4 22 C 54 36, 96 52, 134 66 S 176 86 196 92"/>
+              <circle class="tip" cx="196" cy="92" r="5.5" fill="#4361EE"/>
+            </svg>
+          </div>
+        </div>
+        <p>Coverage falls as code grows; whole journeys go untested.</p>
         <div class="bar" style="background:var(--cobalt)"></div>
       </div>
+
+      <!-- cost -->
       <div class="card pcard a" style="--d:4">
-        <div class="ico" style="background:var(--sun-t)"><svg viewBox="0 0 24 24" stroke="#FFAE1A"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-        <h3>Cloud spend drifts</h3><p>Oversized, idle and forgotten resources keep billing.</p>
+        <div class="phead">
+          <div class="ico" style="background:var(--sun-t)"><svg viewBox="0 0 24 24" stroke="#FFAE1A"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <h3>Cloud spend drifts</h3>
+        </div>
+        <div class="viz2">
+          <div class="vhead">
+            <span class="vlabel">Monthly spend</span>
+            <span class="vnum" style="color:#B87700">+<span data-count="28">0</span>%</span>
+          </div>
+          <div class="vbody">
+            <div class="bars">
+              <i style="--k:0;--h:26%"></i>
+              <i style="--k:1;--h:38%"></i>
+              <i style="--k:2;--h:33%"></i>
+              <i style="--k:3;--h:55%"></i>
+              <i style="--k:4;--h:72%"></i>
+              <i style="--k:5;--h:88%"></i>
+              <i style="--k:6;--h:100%"></i>
+            </div>
+          </div>
+        </div>
+        <p>Oversized, idle and forgotten resources keep on billing.</p>
         <div class="bar" style="background:var(--sun)"></div>
       </div>
+
+      <!-- debt -->
       <div class="card pcard a" style="--d:5">
-        <div class="ico" style="background:var(--orchid-t)"><svg viewBox="0 0 24 24" stroke="#9157FF"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg></div>
-        <h3>Debt compounds</h3><p>Complexity and duplication slow every future change.</p>
+        <div class="phead">
+          <div class="ico" style="background:var(--orchid-t)"><svg viewBox="0 0 24 24" stroke="#9157FF"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg></div>
+          <h3>Debt compounds</h3>
+        </div>
+        <div class="viz2">
+          <div class="vhead">
+            <span class="vlabel">Change effort</span>
+            <span class="vnum" style="color:var(--orchid)"><span data-count="2.4" data-dec="1">0</span>&times;</span>
+          </div>
+          <div class="vbody">
+            <svg class="vspark" viewBox="0 0 200 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="dbt" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#9157FF" stop-opacity=".34"/>
+                  <stop offset="1" stop-color="#9157FF" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <g class="growArea">
+                <path class="area" d="M4 96 L4 84 C 64 82, 118 66, 196 8 L196 96 Z"/>
+                <path d="M4 84 C 64 82, 118 66, 196 8" stroke="#9157FF"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <p>Complexity and duplication slow down every future change.</p>
         <div class="bar" style="background:var(--orchid)"></div>
+      </div>
+    </div>
+
+    <div class="card worse a" style="--d:6">
+      <div class="wt">Day one<small>clean slate</small></div>
+      <div class="wline"><span class="wdot"></span></div>
+      <div class="wt" style="text-align:right;color:#D63C3C">Three quarters later<small>nobody owns it</small></div>
+    </div>
+  </section>
+
+  <!-- 3 · Why SkyForge (animatic) -->
+  <section class="slide">
+    <div class="eyebrow a" style="--d:0">Why SkyForge AI</div>
+    <h2 class="title a" style="--d:1;font-size:56px">Six tools, six tickets. <span class="grad-text">Or one workflow.</span></h2>
+
+    <div class="ba">
+      <!-- PROBLEM -->
+      <div class="card ba-pane old a left" style="--d:2">
+        <div class="ba-head">
+          <span class="tagx">Today</span>
+          <h3>Scattered</h3>
+          <span class="pillx" style="background:var(--tomato-t);color:#D63C3C">6 hand-offs</span>
+        </div>
+
+        <div class="chaos">
+          <div class="tool" style="--c:var(--tomato);--i:0"><span class="ix">#1</span><div class="tn"><i></i>Vulnerabilities</div><div class="tp">dependency bot · advisories</div></div>
+          <div class="tool" style="--c:var(--cobalt);--i:1"><span class="ix">#2</span><div class="tn"><i></i>Unit coverage</div><div class="tp">coverage tool · CI logs</div></div>
+          <div class="tool" style="--c:var(--teal);--i:2"><span class="ix">#3</span><div class="tn"><i></i>Functional tests</div><div class="tp">QA suite · test tracker</div></div>
+          <div class="tool" style="--c:var(--sun);--i:3"><span class="ix">#4</span><div class="tn"><i></i>Cloud cost</div><div class="tp">cloud console · FinOps sheet</div></div>
+          <div class="tool" style="--c:var(--orchid);--i:4"><span class="ix">#5</span><div class="tn"><i></i>Code health</div><div class="tp">quality dashboard · linters</div></div>
+          <div class="tool" style="--c:var(--pink);--i:5"><span class="ix">#6</span><div class="tn"><i></i>Security policy</div><div class="tp">secret / IaC scanners</div></div>
+          <div class="hop"></div>
+        </div>
+
+        <div class="stats bad">
+          <div class="stat"><div class="sv" data-count="6">0</div><div class="sc">platforms to check</div></div>
+          <div class="stat"><div class="sv" data-count="6">0</div><div class="sc">separate tickets</div></div>
+          <div class="stat"><div class="sv"><span data-count="6">0</span>&times;</div><div class="sc">context switches</div></div>
+        </div>
+      </div>
+
+      <!-- MORPH -->
+      <div class="morph a pop" style="--d:3">
+        <div class="pill2"><svg viewBox="0 0 24 24"><path d="M4 12h12"/><path d="M13 7l5 5-5 5"/></svg></div>
+      </div>
+
+      <!-- SOLUTION -->
+      <div class="card ba-pane new a" style="--d:4">
+        <div class="ba-head">
+          <span class="tagx">With</span>
+          <h3>SkyForge <span class="grad-text">AI</span></h3>
+          <span class="pillx" style="background:var(--mint-t);color:#0E9F6E">1 workflow</span>
+        </div>
+
+        <div class="unify">
+          <div class="orbit-path"></div>
+          <div class="orbit-path inner"></div>
+          <div class="orbiter" style="--i:0"><div class="arm"><div class="orb" style="--c:var(--tomato);--i:0"><i></i>Vulnerabilities</div></div></div>
+          <div class="orbiter" style="--i:1"><div class="arm"><div class="orb" style="--c:var(--cobalt);--i:1"><i></i>Coverage</div></div></div>
+          <div class="orbiter" style="--i:2"><div class="arm"><div class="orb" style="--c:var(--teal);--i:2"><i></i>Functional</div></div></div>
+          <div class="orbiter" style="--i:3"><div class="arm"><div class="orb" style="--c:var(--sun);--i:3"><i></i>AWS cost</div></div></div>
+          <div class="orbiter" style="--i:4"><div class="arm"><div class="orb" style="--c:var(--orchid);--i:4"><i></i>Code health</div></div></div>
+          <div class="orbiter" style="--i:5"><div class="arm"><div class="orb" style="--c:var(--pink);--i:5"><i></i>Security</div></div></div>
+          <div class="hub"><img src="logo.svg" alt="SkyForge AI" /></div>
+        </div>
+
+        <div class="stats good">
+          <div class="stat" style="--i:0"><div class="sv" data-count="1">0</div><div class="sc">repo scan</div></div>
+          <div class="stat" style="--i:1"><div class="sv" data-count="1">0</div><div class="sc">review &amp; approval</div></div>
+          <div class="stat" style="--i:2"><div class="sv" data-count="1">0</div><div class="sc">draft pull request</div></div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- 3 · How it works -->
+  <!-- 4 · How it works -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">How it works</div>
     <h2 class="title a" style="--d:1">From repository to <span class="grad-text">verified pull request</span>.</h2>
@@ -368,7 +728,7 @@
     </div>
   </section>
 
-  <!-- 4 · Agents -->
+  <!-- 5 · · Agents -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">The agent crew</div>
     <h2 class="title a" style="--d:1">Six specialists. <span class="grad-text">One command centre.</span></h2>
@@ -382,7 +742,7 @@
     </div>
   </section>
 
-  <!-- 5 · Architecture -->
+  <!-- 6 · · Architecture -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Architecture</div>
     <h2 class="title a" style="--d:1;font-size:52px">How the platform <span class="grad-text">fits together</span>.</h2>
@@ -498,7 +858,7 @@
     </div>
   </section>
 
-  <!-- 6 · Trust -->
+  <!-- 7 · · Trust -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Trust by design</div>
     <h2 class="title a" style="--d:1">AI proposes. <span class="grad-text">People decide.</span></h2>
@@ -517,7 +877,7 @@
     </div>
   </section>
 
-  <!-- 7 · Product -->
+  <!-- 8 · · Product -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">One control plane</div>
     <h2 class="title a" style="--d:1">Every service, <span class="grad-text">held to the same bar</span>.</h2>
@@ -576,43 +936,73 @@
     <p class="a" style="--d:7;margin:14px 0 auto;color:var(--muted);font-size:14px">Illustrative figures for a multi-service enterprise estate · AWS savings simulated.</p>
   </section>
 
-  <!-- 7b · Time saved -->
+  <!-- 8b · · Time saved -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Delivery capacity</div>
-    <h2 class="title a" style="--d:1">Half the toil, <span class="grad-text">twice the throughput</span>.</h2>
+    <h2 class="title a" style="--d:1;font-size:58px">20 effort days of tech debt. <span class="grad-text">Now 10.</span></h2>
 
-    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:34px">
-      <div class="card kpi a" style="--d:2;padding:30px 28px">
-        <div class="k">Overall effort</div>
-        <div class="v" style="color:var(--orchid)"><span data-count="52">0</span>%</div>
-        <div class="s">fewer story points spent on toil</div>
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:26px">
+      <div class="card kpi a" style="--d:2;padding:24px 26px">
+        <div class="k">Tech debt effort</div>
+        <div class="v" style="color:var(--orchid)"><span data-count="10">0</span><em>days saved</em></div>
+        <div class="s">20 → 10 effort days</div>
       </div>
-      <div class="card kpi a" style="--d:3;padding:30px 28px">
-        <div class="k">Vuln remediation</div>
-        <div class="v" style="color:var(--tomato)"><span data-count="61">0</span>%</div>
-        <div class="s">8 pts → 3 pts per critical finding</div>
+      <div class="card kpi a" style="--d:3;padding:24px 26px">
+        <div class="k">Vulnerability remediation</div>
+        <div class="v" style="color:var(--tomato)"><span data-count="3">0</span><em>days saved</em></div>
+        <div class="s">5 → 2 days per 1,000 findings</div>
       </div>
-      <div class="card kpi a" style="--d:4;padding:30px 28px">
-        <div class="k">Test authoring</div>
-        <div class="v" style="color:var(--cobalt)"><span data-count="55">0</span>%</div>
-        <div class="s">13 pts → 5 pts per service</div>
+      <div class="card kpi a" style="--d:4;padding:24px 26px">
+        <div class="k">Unit test automation</div>
+        <div class="v" style="color:var(--cobalt)"><span data-count="2">0</span><em>days saved</em></div>
+        <div class="s">3 → 1 day per service</div>
       </div>
-      <div class="card kpi a" style="--d:5;padding:30px 28px">
+      <div class="card kpi a" style="--d:5;padding:24px 26px">
         <div class="k">Cloud cost review</div>
-        <div class="v" style="color:var(--sun)"><span data-count="30">0</span>%</div>
-        <div class="s">quarterly audit → continuous</div>
+        <div class="v" style="color:var(--sun)">~<span data-count="30">0</span>%<em>monthly saving</em></div>
+        <div class="s">rightsizing, Graviton and idle resources</div>
       </div>
     </div>
 
-    <div class="card a" style="--d:6;margin-top:28px;padding:28px 34px">
-      <div class="sev" style="gap:16px">
-        <div class="sr" style="grid-template-columns:200px 1fr 130px"><span>Manual today</span><div class="track" style="height:14px"><i style="--w:100%;background:var(--line-2)"></i></div><b>21 pts / sprint</b></div>
-        <div class="sr" style="grid-template-columns:200px 1fr 130px"><span>With SkyForge</span><div class="track" style="height:14px"><i style="--w:48%;background:var(--grad)"></i></div><b>10 pts / sprint</b></div>
+    <div class="card sprint a" style="--d:6">
+      <div class="srow">
+        <div class="slab">Today<small>20 effort days</small></div>
+        <div class="days">
+          <i class="day vuln" style="--n:0;--row:0"></i><i class="day vuln" style="--n:1;--row:0"></i><i class="day vuln" style="--n:2;--row:0"></i><i class="day vuln" style="--n:3;--row:0"></i><i class="day vuln" style="--n:4;--row:0"></i>
+          <i class="day test" style="--n:5;--row:0"></i><i class="day test" style="--n:6;--row:0"></i><i class="day test" style="--n:7;--row:0"></i>
+          <i class="day func" style="--n:8;--row:0"></i><i class="day func" style="--n:9;--row:0"></i><i class="day func" style="--n:10;--row:0"></i><i class="day func" style="--n:11;--row:0"></i>
+          <i class="day health" style="--n:12;--row:0"></i><i class="day health" style="--n:13;--row:0"></i><i class="day health" style="--n:14;--row:0"></i><i class="day health" style="--n:15;--row:0"></i><i class="day health" style="--n:16;--row:0"></i>
+          <i class="day policy" style="--n:17;--row:0"></i><i class="day policy" style="--n:18;--row:0"></i><i class="day policy" style="--n:19;--row:0"></i>
+        </div>
+        <div class="sout" style="color:#D63C3C">20 days<small>spent on tech debt</small></div>
       </div>
-      <div class="sub" style="margin-top:16px">≈ 11 story points returned per sprint, per service — capacity that goes straight back into the product backlog.</div>
+
+      <div class="srow">
+        <div class="slab">With SkyForge<small>10 effort days</small></div>
+        <div class="days">
+          <i class="day vuln" style="--n:0;--row:1"></i><i class="day vuln" style="--n:1;--row:1"></i>
+          <i class="day test" style="--n:2;--row:1"></i>
+          <i class="day func" style="--n:3;--row:1"></i><i class="day func" style="--n:4;--row:1"></i>
+          <i class="day health" style="--n:5;--row:1"></i><i class="day health" style="--n:6;--row:1"></i><i class="day health" style="--n:7;--row:1"></i>
+          <i class="day policy" style="--n:8;--row:1"></i><i class="day policy" style="--n:9;--row:1"></i>
+          <i class="day prod back" style="--n:10;--row:1"></i><i class="day prod back" style="--n:11;--row:1"></i><i class="day prod back" style="--n:12;--row:1"></i><i class="day prod back" style="--n:13;--row:1"></i><i class="day prod back" style="--n:14;--row:1"></i>
+          <i class="day prod back" style="--n:15;--row:1"></i><i class="day prod back" style="--n:16;--row:1"></i><i class="day prod back" style="--n:17;--row:1"></i><i class="day prod back" style="--n:18;--row:1"></i><i class="day prod back" style="--n:19;--row:1"></i>
+        </div>
+        <div class="sout" style="color:#0E9F6E">10 days<small>handed back to delivery</small></div>
+      </div>
+
+      <div class="slegend">
+        <span><i style="background:var(--tomato)"></i>Vulnerabilities 5→2</span>
+        <span><i style="background:var(--cobalt)"></i>Unit tests 3→1</span>
+        <span><i style="background:var(--teal)"></i>Functional tests 4→2</span>
+        <span><i style="background:var(--orchid)"></i>Code health 5→3</span>
+        <span><i style="background:var(--pink)"></i>Policy &amp; IaC 3→2</span>
+        <span><i style="background:var(--mint)"></i>Delivery work</span>
+        <span class="gain">+10 effort days · 1 square = 1 day</span>
+      </div>
     </div>
 
-    <p class="a" style="--d:7;margin:14px 0 auto;color:var(--muted);font-size:14px">Based on measured agent run times vs. typical manual effort for the same tasks · illustrative.</p>
+    <p class="a" style="--d:7;margin:10px 0 auto;color:var(--muted);font-size:13px">Tech debt currently absorbs 20 effort days of delivery capacity. Baselines are our own measured effort — 5 days per 1,000 vulnerabilities, 3 days to automate unit tests for a service. The SkyForge column includes the engineer's review and approval of every generated pull request. Cloud cost saving is an estimate from the rightsizing, Graviton and idle-resource patches the optimiser produces.</p>
   </section>
 
   <!-- Live demo -->
@@ -633,7 +1023,7 @@
     </div>
   </section>
 
-  <!-- 8 · Stack -->
+  <!-- 9 · · Stack -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Under the hood</div>
     <h2 class="title a" style="--d:1">Proven, <span class="grad-text">open technology</span>.</h2>
@@ -649,7 +1039,7 @@
     </div>
   </section>
 
-  <!-- 9 · Roadmap -->
+  <!-- 10 · · Roadmap -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">What's next</div>
     <h2 class="title a" style="--d:1">From hackathon to <span class="grad-text">platform</span>.</h2>
@@ -661,7 +1051,7 @@
     </div>
   </section>
 
-  <!-- 10 · Close -->
+  <!-- 11 · · Close -->
   <section class="slide close">
     <div class="blob" style="width:460px;height:460px;background:#D9C8FF;left:120px;top:80px"></div>
     <div class="blob" style="width:420px;height:420px;background:#FFC9D2;right:140px;bottom:40px;animation-delay:-7s"></div>
