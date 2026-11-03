@@ -336,8 +336,6 @@
   .slide.active .check .tick svg { animation: draw .6s var(--ease) forwards; animation-delay: calc(var(--d) * 110ms + 550ms); }
   @keyframes draw { to { stroke-dashoffset: 0; } }
 
-  /* 7 — dashboard */
-  .dash { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; margin-top: auto; }
   .kx { padding: 24px 26px 24px; display: grid; grid-template-rows: 42px 210px 78px; row-gap: 14px; position: relative; overflow: hidden;
         transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
   .viz { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
@@ -450,12 +448,35 @@
   .player .play svg { width: 40px; height: 40px; fill: #fff; margin-left: 6px; }
   .player.playing .play { opacity: 0; pointer-events: none; }
 
-  /* 8 — stack */
-  .stack-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: auto; margin-bottom: auto; }
-  .tech { padding: 26px; display: flex; flex-direction: column; gap: 6px; border-top: 5px solid; }
-  .tech .k { font: 700 13px var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-  .tech .v { font: 700 24px var(--display); }
-  .tech .s { font-size: 15px; color: var(--ink-2); }
+  /* 8 — stack, segregated layer by layer */
+  .layers { display: flex; flex-direction: column; justify-content: center; gap: 14px;
+            flex: 1; min-height: 0; margin-top: 24px; }
+  .layer { display: grid; grid-template-columns: 224px 1fr; align-items: center; gap: 26px;
+           padding: 14px 22px 14px 20px; border-left: 6px solid; position: relative; min-height: 92px;
+           transition: transform .35s var(--ease), box-shadow .35s var(--ease); }
+  .layer:hover { transform: translateX(5px); box-shadow: var(--shadow-lg); }
+  /* left rail — tier number, name and what the tier is responsible for */
+  .lrail { padding-right: 22px; border-right: 1px solid var(--line); align-self: stretch;
+           display: flex; flex-direction: column; justify-content: center; }
+  .lrail .ln { font: 800 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .lrail h3 { font-size: 19px; line-height: 1.15; letter-spacing: -.02em; color: var(--ink); margin-top: 5px; }
+  .lrail p { font: 600 11.5px var(--body); line-height: 1.35; color: var(--muted); margin-top: 4px; }
+  /* right side — fixed 3 columns so every chip lines up across all five layers */
+  .lrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: stretch; }
+  .chip2 { display: flex; align-items: center; gap: 11px; min-width: 0;
+           padding: 10px 14px; border-radius: 14px; background: #FBFAFE; border: 1px solid var(--line); }
+  .chip2 .tico { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: none; }
+  .chip2 .tico img { width: 22px; height: 22px; display: block; }
+  .chip2 .tico svg { width: 21px; height: 21px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .chip2 .ctx { min-width: 0; }
+  .chip2 .cn { display: block; font: 700 15px var(--body); color: var(--ink); line-height: 1.15; letter-spacing: -.01em; }
+  .chip2 .cs { display: block; font: 600 11.5px var(--body); color: var(--muted); line-height: 1.3; margin-top: 2px; }
+
+  /* closing claims strip */
+  .stackbar2 { display: flex; align-items: center; gap: 26px; margin-top: 18px; padding: 15px 24px; }
+  .stackbar2 > span { display: flex; align-items: center; gap: 9px; font: 600 13.5px var(--body); color: var(--ink-2); }
+  .stackbar2 > span i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--c); }
+  .stackbar2 .note { margin-left: auto; font: 600 12px var(--body); color: var(--muted); }
 
   /* 9 — roadmap */
   .road { position: relative; margin-top: auto; margin-bottom: auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px; }
@@ -499,7 +520,7 @@
         <div class="sat" style="left:231px;top:-29px;background:var(--tomato)" title="Vulnerability Remediation"><svg viewBox="0 0 24 24"><path d="M8 9V7a4 4 0 0 1 8 0v2"/><rect x="6" y="9" width="12" height="10" rx="5"/><path d="M12 13v3M3 12h3M18 12h3M4 6l2.5 2M20 6l-2.5 2M4 19l2.5-2M20 19l-2.5-2"/></svg></div>
         <div class="sat" style="right:-29px;top:231px;background:var(--cobalt)" title="Unit Test &amp; Coverage"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/></svg></div>
         <div class="sat" style="left:231px;bottom:-29px;background:var(--teal)" title="Functional Automation"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18"/><path d="M8 13l2 2 4-4"/></svg></div>
-        <div class="sat" style="left:-29px;top:231px;background:var(--sun)" title="AWS Cost Optimiser"><svg viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/><path d="M12 10v6M10.2 11.2c0-.7.8-1.2 1.8-1.2s1.8.5 1.8 1.2c0 1.6-3.6.8-3.6 2.6 0 .7.8 1.2 1.8 1.2s1.8-.5 1.8-1.2"/></svg></div>
+        <div class="sat" style="left:-29px;top:231px;background:var(--sun)" title="AWS Cost Optimiser"><svg viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/><path d="M12 8v5M12 16h.01"/></svg></div>
       </div>
       <div class="orbit inner">
         <div class="sat" style="left:141px;top:-29px;background:var(--orchid)" title="Code Health"><svg viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/><path d="M13 5l-2 14"/></svg></div>
@@ -544,7 +565,7 @@
       <!-- tests -->
       <div class="card pcard a" style="--d:3">
         <div class="phead">
-          <div class="ico" style="background:var(--cobalt-t)"><svg viewBox="0 0 24 24" stroke="#4361EE"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg></div>
+          <div class="ico" style="background:var(--cobalt-t)"><svg viewBox="0 0 24 24" stroke="#4361EE"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/></svg></div>
           <h3>Tests lag behind</h3>
         </div>
         <div class="viz2">
@@ -568,7 +589,7 @@
       <!-- cost -->
       <div class="card pcard a" style="--d:4">
         <div class="phead">
-          <div class="ico" style="background:var(--sun-t)"><svg viewBox="0 0 24 24" stroke="#FFAE1A"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="ico" style="background:var(--sun-t)"><svg viewBox="0 0 24 24" stroke="#E09400"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></svg></div>
           <h3>Cloud spend drifts</h3>
         </div>
         <div class="viz2">
@@ -737,7 +758,7 @@
       <div class="card agent a" style="--d:3"><div class="num" style="color:var(--cobalt)">02</div><div><h3>Unit Test &amp; Coverage</h3><p>Measures real coverage and generates tests that must pass.</p><span class="pill" style="background:var(--cobalt-t);color:var(--cobalt)">sandbox.pytest</span></div></div>
       <div class="card agent a" style="--d:4"><div class="num" style="color:var(--teal)">03</div><div><h3>Functional Automation</h3><p>Maps API journeys and fills functional test gaps.</p><span class="pill" style="background:var(--teal-t);color:#0A8F85">journey.map</span></div></div>
       <div class="card agent a" style="--d:5"><div class="num" style="color:var(--sun)">04</div><div><h3>AWS Cost Optimiser</h3><p>Rightsizing, Graviton and storage savings as Terraform patches.</p><span class="pill" style="background:var(--sun-t);color:#B87700">cost.analyse</span></div></div>
-      <div class="card agent a" style="--d:6"><div class="num" style="color:var(--orchid)">05</div><div><h3>Code Health</h3><p>Complexity, maintainability, lint and duplication hotspots.</p><span class="pill" style="background:var(--orchid-t);color:var(--orchid)">radon · ruff</span></div></div>
+      <div class="card agent a" style="--d:6"><div class="num" style="color:var(--orchid)">05</div><div><h3>Code health</h3><p>Complexity, maintainability, lint and duplication hotspots.</p><span class="pill" style="background:var(--orchid-t);color:var(--orchid)">radon · ruff</span></div></div>
       <div class="card agent a" style="--d:7"><div class="num" style="color:var(--pink)">06</div><div><h3>Security Guardrails</h3><p>Secrets, code, CI and IaC policy, and validation of every fix.</p><span class="pill" style="background:var(--pink-t);color:#C42F79">policy.validate</span></div></div>
     </div>
   </section>
@@ -842,7 +863,7 @@
           <text class="zone" x="290" y="584">EXECUTION &amp; INTELLIGENCE</text>
           <rect x="290" y="598" width="1270" height="112" rx="20" fill="#F7F5FC"/>
           <rect class="node" x="310" y="620" width="235" height="68" rx="14"/><circle cx="332" cy="654" r="6" fill="#16C47F"/><text class="t" x="346" y="650">Data Store</text><text class="s" x="346" y="672">Findings · Audit</text>
-          <rect class="node" x="558" y="620" width="235" height="68" rx="14"/><circle cx="580" cy="654" r="6" fill="#FFAE1A"/><text class="t" x="594" y="650">AWS Cost Model</text><text class="s" x="594" y="672">Terraform · CUR</text>
+          <rect class="node" x="558" y="620" width="235" height="68" rx="14"/><circle cx="580" cy="654" r="6" fill="#FFAE1A"/><text class="t" x="594" y="650">AWS Cost Model</text><text class="s" x="594" y="672">Terraform · pricing</text>
           <rect class="node" x="806" y="620" width="235" height="68" rx="14"/><circle cx="828" cy="654" r="6" fill="#0EB5A8"/><text class="t" x="842" y="650">Docker Sandbox</text><text class="s" x="842" y="672">Isolated runs</text>
           <rect class="node" x="1054" y="620" width="235" height="68" rx="14"/><circle cx="1076" cy="654" r="6" fill="#9157FF"/><text class="t" x="1090" y="650">Local LLM</text><text class="s" x="1090" y="672">Ollama · Gemma 3</text>
           <rect class="node" x="1302" y="620" width="235" height="68" rx="14"/><circle cx="1324" cy="654" r="6" fill="#FF5A5A"/><text class="t" x="1338" y="650">OSV.dev</text><text class="s" x="1338" y="672">Vulnerability intel</text>
@@ -877,66 +898,7 @@
     </div>
   </section>
 
-  <!-- 8 · · Product -->
-  <section class="slide">
-    <div class="eyebrow a" style="--d:0">One control plane</div>
-    <h2 class="title a" style="--d:1">Every service, <span class="grad-text">held to the same bar</span>.</h2>
-    <div class="dash">
-      <!-- Vulnerabilities -->
-      <div class="card kx a" style="--d:2">
-        <div class="kh"><span class="ki" style="background:var(--tomato-t)"><svg viewBox="0 0 24 24" stroke="#FF5A5A"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16h.01"/></svg></span>Vulnerabilities<span class="badge" style="background:var(--tomato-t);color:#D63C3C">detected</span></div>
-        <div class="viz"><div class="big" style="color:var(--tomato)" data-count="47">0</div>
-        <div class="sub">critical &amp; high, prioritised</div></div>
-        <div class="foot sev">
-          <div class="sr"><span>Critical</span><div class="track"><i style="--w:26%;background:var(--tomato)"></i></div><b>12</b></div>
-          <div class="sr"><span>High</span><div class="track"><i style="--w:74%;background:#FF8A5A"></i></div><b>35</b></div>
-        </div>
-      </div>
-
-      <!-- Coverage -->
-      <div class="card kx a" style="--d:3">
-        <div class="kh"><span class="ki" style="background:var(--cobalt-t)"><svg viewBox="0 0 24 24" stroke="#4361EE"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/></svg></span>Unit coverage<span class="badge" style="background:var(--mint-t);color:#0E9A63">▲ 64 pts</span></div>
-        <div class="viz"><div class="ringwrap">
-          <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="bg"/><circle cx="60" cy="60" r="52" class="fg" stroke="#4361EE" style="--off:70.6"/></svg>
-          <div class="rv"><span data-count="78.4" data-dec="1">0</span><small>%</small></div>
-        </div></div>
-        <div class="foot"><div class="sub">14.4% → 78.4% with generated tests</div></div>
-      </div>
-
-      <!-- AWS savings -->
-      <div class="card kx a" style="--d:4">
-        <div class="kh"><span class="ki" style="background:var(--sun-t)"><svg viewBox="0 0 24 24" stroke="#E09400"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5z"/></svg></span>AWS savings<span class="badge" style="background:var(--sun-t);color:#B87700">per month</span></div>
-        <div class="viz"><div class="big"><span class="cur">$</span><span data-count="4850">0</span></div>
-        <div class="sub">simulated from Terraform</div></div>
-        <div class="foot"><div class="stackbar"><i style="--w:52%;background:var(--sun)"></i><i style="--w:18%;background:var(--tomato)"></i><i style="--w:17%;background:var(--orchid)"></i><i style="--w:13%;background:var(--teal)"></i></div>
-        <div class="legend2"><span><i style="background:var(--sun)"></i>Rightsize</span><span><i style="background:var(--tomato)"></i>Graviton</span><span><i style="background:var(--orchid)"></i>Storage</span><span><i style="background:var(--teal)"></i>Idle</span></div></div>
-      </div>
-
-      <!-- Code health -->
-      <div class="card kx a" style="--d:5">
-        <div class="kh"><span class="ki" style="background:var(--orchid-t)"><svg viewBox="0 0 24 24" stroke="#9157FF"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/><path d="M13 5l-2 14"/></svg></span>Code health<span class="badge" style="background:var(--mint-t);color:#0E9A63">▲ 25</span></div>
-        <div class="viz"><div class="ringwrap">
-          <svg class="ring" viewBox="0 0 120 120"><defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF5A5A"/><stop offset=".52" stop-color="#C655AE"/><stop offset="1" stop-color="#9157FF"/></linearGradient></defs><circle cx="60" cy="60" r="52" class="bg"/><circle cx="60" cy="60" r="52" class="fg" stroke="url(#hg)" style="--off:45.7"/></svg>
-          <div class="rv"><span data-count="86">0</span><small>/100</small></div>
-        </div></div>
-        <div class="foot"><div class="sub">61 → 86 after safe refactors</div></div>
-      </div>
-    </div>
-
-    <div class="pipe a" style="--d:6">
-      <div class="pipe-track"></div>
-      <div class="ps" style="--c:var(--cobalt);--i:0"><b>1</b>Detect</div>
-      <div class="ps" style="--c:var(--orchid);--i:1"><b>2</b>Explain</div>
-      <div class="ps" style="--c:var(--tomato);--i:2"><b>3</b>Propose</div>
-      <div class="ps" style="--c:var(--pink);--i:3"><b>4</b>Validate</div>
-      <div class="ps" style="--c:var(--sun);--i:4"><b>5</b>Approve</div>
-      <div class="ps" style="--c:var(--teal);--i:5"><b>6</b>Verify</div>
-      <div class="ps" style="--c:var(--mint);--i:6"><b>7</b>Deliver</div>
-    </div>
-    <p class="a" style="--d:7;margin:14px 0 auto;color:var(--muted);font-size:14px">Illustrative figures for a multi-service enterprise estate · AWS savings simulated.</p>
-  </section>
-
-  <!-- 8b · · Time saved -->
+  <!-- 8 · · Time saved -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Delivery capacity</div>
     <h2 class="title a" style="--d:1;font-size:58px">20 effort days of tech debt. <span class="grad-text">Now 10.</span></h2>
@@ -1027,19 +989,150 @@
   <section class="slide">
     <div class="eyebrow a" style="--d:0">Under the hood</div>
     <h2 class="title a" style="--d:1">Proven, <span class="grad-text">open technology</span>.</h2>
-    <div class="stack-grid">
-      <div class="card tech a" style="--d:2;border-color:var(--cobalt)"><div class="k">Frontend</div><div class="v">React · Vite</div><div class="s">TypeScript portal</div></div>
-      <div class="card tech a" style="--d:3;border-color:var(--orchid)"><div class="k">Backend</div><div class="v">FastAPI</div><div class="s">SQLAlchemy · Alembic</div></div>
-      <div class="card tech a" style="--d:4;border-color:var(--tomato)"><div class="k">Agents</div><div class="v">CrewAI</div><div class="s">Tool allow-lists</div></div>
-      <div class="card tech a" style="--d:5;border-color:var(--pink)"><div class="k">LLM</div><div class="v">Ollama · Gemma 3</div><div class="s">Runs locally</div></div>
-      <div class="card tech a" style="--d:6;border-color:var(--teal)"><div class="k">Sandbox</div><div class="v">Docker</div><div class="s">Python · Node · Go</div></div>
-      <div class="card tech a" style="--d:7;border-color:var(--sun)"><div class="k">Intelligence</div><div class="v">OSV.dev</div><div class="s">Open vulnerability data</div></div>
-      <div class="card tech a" style="--d:8;border-color:var(--mint)"><div class="k">Cloud</div><div class="v">Terraform · CUR</div><div class="s">AWS cost model</div></div>
-      <div class="card tech a" style="--d:9;border-color:var(--ink)"><div class="k">Delivery</div><div class="v">GitHub App</div><div class="s">Short-lived tokens</div></div>
+
+    <div class="layers">
+
+      <!-- 01 · what the engineer touches -->
+      <div class="card layer a" style="--d:2;border-color:#087EA4">
+        <div class="lrail">
+          <div class="ln">LAYER 01</div>
+          <h3>Experience</h3>
+          <p>What the engineer sees and approves</p>
+        </div>
+        <div class="lrow">
+          <div class="chip2">
+            <span class="tico" style="background:#E8FAFF">
+              <img src="https://cdn.simpleicons.org/react/087EA4" alt="React" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#087EA4" style="display:none"><circle cx="12" cy="12" r="2"/><ellipse cx="12" cy="12" rx="10" ry="4.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(120 12 12)"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">React</span><span class="cs">Review and approval portal</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:#F3ECFF">
+              <img src="https://cdn.simpleicons.org/vite/9157FF" alt="Vite" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#9157FF" style="display:none"><path d="M12 2.5L21 6l-8 15.5L3 6z"/><path d="M12.6 7l-3 5h2.4l-.8 4 3.2-5.4h-2.4z"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">Vite · TypeScript</span><span class="cs">Build and type safety</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 02 · the control plane -->
+      <div class="card layer a" style="--d:3;border-color:#009688">
+        <div class="lrail">
+          <div class="ln">LAYER 02</div>
+          <h3>Platform</h3>
+          <p>API, scan state and audit record</p>
+        </div>
+        <div class="lrow">
+          <div class="chip2">
+            <span class="tico" style="background:#E0F5F3">
+              <img src="https://cdn.simpleicons.org/fastapi/009688" alt="FastAPI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#009688" style="display:none"><circle cx="12" cy="12" r="9.5"/><path d="M12.8 6.5L8 12.8h3.6L10.9 18l5-6.5h-3.7z" fill="#009688" stroke="none"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">FastAPI</span><span class="cs">Live scan progress over SSE</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:#F0E9FA">
+              <img src="https://cdn.simpleicons.org/sqlalchemy/844FBA" alt="SQLAlchemy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#844FBA" style="display:none"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">SQLAlchemy</span><span class="cs">Findings, proposals, audit trail</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 · the reasoning -->
+      <div class="card layer a" style="--d:4;border-color:var(--tomato)">
+        <div class="lrail">
+          <div class="ln">LAYER 03</div>
+          <h3>Intelligence</h3>
+          <p>Six agents and the model behind them</p>
+        </div>
+        <div class="lrow">
+          <div class="chip2">
+            <span class="tico" style="background:var(--tomato-t)">
+              <img src="https://cdn.simpleicons.org/crewai/FF5A5A" alt="CrewAI" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#FF5A5A" style="display:none"><rect x="6" y="8" width="12" height="10" rx="3"/><path d="M12 8V4.5M9.5 13h.01M14.5 13h.01M3.5 12H6M18 12h2.5"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">CrewAI</span><span class="cs">Role-based explanations</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:#F1EFF8">
+              <img src="https://cdn.simpleicons.org/ollama/1C1838" alt="Ollama" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#1C1838" style="display:none"><path d="M12 3a4.5 4.5 0 0 0-4.5 4.5c0 .9-.4 1.6-1 2.2A4 4 0 0 0 9 17h6a4 4 0 0 0 2.5-7.3c-.6-.6-1-1.3-1-2.2A4.5 4.5 0 0 0 12 3z"/><path d="M10 21h4"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">Ollama · Gemma 3</span><span class="cs">Runs on our own hardware</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 04 · the facts the agents work from -->
+      <div class="card layer a" style="--d:5;border-color:var(--sun)">
+        <div class="lrail">
+          <div class="ln">LAYER 04</div>
+          <h3>Evidence</h3>
+          <p>Where the findings actually come from</p>
+        </div>
+        <div class="lrow">
+          <div class="chip2">
+            <span class="tico" style="background:var(--sun-t)">
+              <svg viewBox="0 0 24 24" stroke="#E09400"><path d="M12 3l7.5 3.4v5.3c0 4.2-3.1 7.8-7.5 9-4.4-1.2-7.5-4.8-7.5-9V6.4z"/><circle cx="12" cy="11" r="2.6"/><path d="M13.9 12.9L16 15"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">OSV.dev</span><span class="cs">Open, verifiable advisories</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:#F0E9FA">
+              <img src="https://cdn.simpleicons.org/terraform/844FBA" alt="Terraform" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="none" fill="#844FBA" style="display:none"><path d="M3 4.3l5.4 3.1v6.2L3 10.5zM9.3 7.9l5.4 3.1v6.2l-5.4-3.1zM15.6 4.3L21 7.4v6.2l-5.4-3.1zM9.3 15.1l5.4 3.1v3.5l-5.4-3.1z"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">Terraform</span><span class="cs">Cost modelled from IaC</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:var(--orchid-t)">
+              <img src="https://cdn.simpleicons.org/ruff/9157FF" alt="Ruff" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#9157FF" style="display:none"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/><path d="M13 5l-2 14"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">Ruff · Radon</span><span class="cs">Lint and complexity metrics</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 05 · proving it, then shipping it -->
+      <div class="card layer a" style="--d:6;border-color:#2496ED">
+        <div class="lrail">
+          <div class="ln">LAYER 05</div>
+          <h3>Verify &amp; deliver</h3>
+          <p>Proven in isolation, then handed back</p>
+        </div>
+        <div class="lrow">
+          <div class="chip2">
+            <span class="tico" style="background:#E4F1FD">
+              <img src="https://cdn.simpleicons.org/docker/2496ED" alt="Docker" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#2496ED" style="display:none"><rect x="3" y="9" width="18" height="10" rx="2"/><path d="M7 9V6h10v3M7 14h4"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">Docker</span><span class="cs">Tests run with networking off</span></span>
+          </div>
+          <div class="chip2">
+            <span class="tico" style="background:#F1EFF8">
+              <img src="https://cdn.simpleicons.org/github/181717" alt="GitHub" onerror="this.style.display='none';this.nextElementSibling.style.display='block'" />
+              <svg viewBox="0 0 24 24" stroke="#1C1838" style="display:none"><circle cx="6" cy="5" r="2.2"/><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M6 7.2v9.6M18 16.8V10a3 3 0 0 0-3-3h-4M13 5l-2 2 2 2"/></svg>
+            </span>
+            <span class="ctx"><span class="cn">GitHub App</span><span class="cs">Draft PRs, short-lived tokens</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card stackbar2 a" style="--d:7">
+      <span style="--c:var(--mint)"><i></i>Open-source or first-party throughout</span>
+      <span style="--c:var(--orchid)"><i></i>No proprietary AI vendor</span>
+      <span style="--c:var(--cobalt)"><i></i>Runs entirely inside our own network</span>
+      <span class="note">Every component is swappable — nothing here locks us in.</span>
     </div>
   </section>
 
-  <!-- 10 · · Roadmap -->
+  <!-- 10 — roadmap -->
   <section class="slide">
     <div class="eyebrow a" style="--d:0">What's next</div>
     <h2 class="title a" style="--d:1">From hackathon to <span class="grad-text">platform</span>.</h2>
@@ -1148,6 +1241,9 @@
   const fromHash = () => Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1);
   addEventListener("hashchange", () => { if (fromHash() !== current) go(fromHash()); });
   go(fromHash());
+
+
+
 </script>
 </body>
 </html>
